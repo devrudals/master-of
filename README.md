@@ -39,6 +39,12 @@ Restart the session. The first `SessionStart` hook run bootstraps an empty
 registry (the six domain gates, no skills classified yet) and starts scanning
 your installed skills for classification.
 
+> If you're developing this plugin locally from a cloned copy of
+> `~/.claude/skills/master-of` (or another skills-dir checkout) *and* also
+> install the marketplace version, both register as a plugin named
+> `master-of` and the marketplace one wins — the local dev copy won't load
+> until you rename one of them. Not an issue for a normal install.
+
 ## How it works, in four steps
 
 1. **Session starts** → the hook (a few milliseconds) diffs your skills
