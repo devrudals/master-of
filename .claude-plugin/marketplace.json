@@ -1,0 +1,31 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "master-of",
+  "owner": {
+    "name": "devrudals"
+  },
+  "metadata": {
+    "description": "Marketplace for the master-of Claude Code skill-gate plugin.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "master-of",
+      "source": "./plugins/master-of",
+      "description": "Keeps rarely-used skills dormant behind domain gates and activates only what a task needs, instead of loading every installed skill into every session. Self-scans at session start, auto-classifies new skills, and reports what's broken (dead MCP servers, gated skills whose plugin is off).",
+      "version": "0.1.0",
+      "author": {
+        "name": "devrudals"
+      },
+      "category": "productivity",
+      "homepage": "https://github.com/devrudals/master-of",
+      "tags": [
+        "skills",
+        "token-optimization",
+        "context-management",
+        "plugin-management",
+        "productivity"
+      ]
+    }
+  ]
+}

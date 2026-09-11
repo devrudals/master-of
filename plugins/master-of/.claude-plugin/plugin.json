@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
+  "name": "master-of",
+  "version": "0.1.0",
+  "description": "Skill-gate system for Claude Code: keeps rarely-used skills dormant behind domain gates (design/dev/pipelines/planning/research/stock, extensible) and activates only what a task actually needs, instead of loading every installed skill into every session. check-skills shows brief status + a health check (dead MCP servers, gated skills whose plugin is off); check-skills-all shows the full inventory.",
+  "author": {
+    "name": "devrudals"
+  },
+  "skills": [
+    "./skills/check-skills",
+    "./skills/check-skills-all",
+    "./skills/design",
+    "./skills/dev",
+    "./skills/pipelines",
+    "./skills/planning",
+    "./skills/research",
+    "./skills/stock",
+    "./"
+  ],
+  "homepage": "https://github.com/devrudals/master-of",
+  "repository": "https://github.com/devrudals/master-of",
+  "license": "MIT"
+}
