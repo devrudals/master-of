@@ -68,16 +68,22 @@ For each newly-found component:
      `~/.claude/skills-library/<category>/_commands/` or `_agents/`. The
      `_`-prefixed dirs keep them apart from skill folders in the same
      category.
-   - **Agents that gated skills spawn — decide as a set, and ask.** A
-     framework often ships N skills plus M agents those skills spawn by
-     `subagent_type`. Gating the agents saves their always-on cost, but every
-     spawn from a gated skill then costs a parent-side `Read` of the agent's
-     file (~1-3k tokens each). For a small set that's fine; for a large,
-     frequently-spawned set (10+ agents, several spawns per workflow run)
-     it can cost more per session than it saves. Quantify both sides in one
-     line (always-on saving vs. reads per typical run) and let the user
-     pick: gate them, or file them in `always_on` with reason
-     `spawn_cost`. Don't decide this one silently either way.
+   - **Agents that gated skills spawn — the "spawn-cost" shape, and the
+     rule is: keep them always-on.** A framework often ships N skills plus M
+     agents those skills spawn by `subagent_type` (GSD: 65 skills, 34
+     agents). Gating the agents saves their always-on cost (~40 tok each),
+     but every spawn from a gated skill then costs a parent-side `Read` of
+     the agent's file — and agent prompts run thousands of tokens (GSD's
+     median 3.9k, largest 12k). One phase run spawning three of them costs
+     ~20k, ten sessions' worth of the saving. So for this shape: gate the
+     skills, file the agents in `always_on` with `reason: "spawn_cost"` and
+     `bundle: "<framework>"`, and record `agents_always_on: {count,
+     desc_ko}` on that category's `category_meta.<cat>.bundle` so the
+     report says why in one line. This is the default, not a question —
+     ask only when the set is small and the prompts short enough that it's
+     genuinely a toss-up (say, ≤5 agents under ~1k tokens each, rarely
+     spawned). The test is simple: would one typical run of the framework
+     cost more in agent reads than several sessions of always-on saving?
    - **Plugin-provided component** (skill, command or agent): don't move anything — plugin files are
      addressed in place. Run `claude plugin disable <plugin>@<marketplace>`
      instead. A single plugin can bundle skills that belong in *different*
@@ -256,7 +262,7 @@ Then:
    via the hook until fixed — the user can silence one by adding its subject
    (e.g. `"MCP gbrain"`) to `state.json`'s `dismissed` list.
 
-### Large bundled plugins (`category_meta.<category>.bundle`)
+### Large bundled plugins (`category_meta.<category>.bundle`) — "멀티 스킬 플러그인"
 
 Some plugins bundle far more skills than a typical category (GSD's ~65 is
 the current example). Every one of those skills is still individually
@@ -273,7 +279,11 @@ large-volume plugin that has the same shape (dozens+ of skills, all filed
 into one category) — not for every category, and not for `pipelines` entries
 even if they happen to come from the same plugin, since each pipeline is a
 distinct end-to-end choice the user picks between, not internal detail to
-hide.
+hide. If the same plugin's agents were kept always-on for spawn cost (see
+Step 1), `bundle.agents_always_on = {count, desc_ko}` puts that on the
+bundle's line too — the report's "멀티 스킬 플러그인" section is where a
+user learns both facts at once: the skills are gated here, the agents
+deliberately aren't.
 
 If `report.txt` is missing or looks stale relative to `registry.json` (e.g.
 you just classified something in Step 1 and haven't regenerated it yet), run

@@ -200,6 +200,19 @@ function shortPath(p: string): string {
 // an agent's body is a system prompt to spawn with. Skills stay untagged --
 // they're the default and the majority.
 const TYPE_TAG_KO: Record<string, string> = { command: "[커맨드] ", agent: "[에이전트] " };
+const TYPE_LABEL_KO: Record<string, string> = {
+  raw_agent: "에이전트",
+  raw_command: "커맨드",
+  raw_skill: "스킬",
+  plugin: "플러그인",
+};
+const ALWAYS_ON_REASON_KO: Record<string, string> = {
+  spawn_cost: "게이트된 부모 스킬이 자주 스폰 — 게이트하면 스폰마다 파일을 Read해야 해서 절약분보다 비용이 큼",
+  hook_dependency: "훅이 이 플러그인에 묶여 있어 끄면 훅도 죽음",
+  output_style: "출력 스타일 — 게이트할 대상이 아님",
+  near_zero_cost: "상시 비용이 거의 0",
+  silent_opportunistic: "사용자가 이름을 몰라도 스스로 발동해야 하는 스킬",
+};
 function typeTag(e: any): string {
   return TYPE_TAG_KO[e.type] || "";
 }
@@ -414,6 +427,8 @@ function main() {
     lines.push("");
     for (const { cat, m, count } of bundleCats) {
       lines.push(`- **${m.bundle.plugin_name}** (스킬 ${count}개) — \`${cat}\` 게이트 안에 이미 분류되어 있음`);
+      const ao = m.bundle.agents_always_on;
+      if (ao) lines.push(`  - ${ao.desc_ko}`);
     }
   }
 
@@ -425,11 +440,24 @@ function main() {
   lines.push("");
   lines.push(`${aoMeta.desc_ko} — 총 ${alwaysOn.length}개`);
   lines.push("");
-  [...alwaysOn]
-    .sort((a: any, b: any) => a.name.localeCompare(b.name))
-    .forEach((e: any, i: number) => {
-      lines.push(`${i + 1}. **${e.name}** (사유: ${e.reason})${SEP}${e.description_ko || e.description}`);
-    });
+  // Entries that share a `bundle` (e.g. a framework's 34 agents all kept
+  // always-on for the same reason) render as ONE line, not 34 -- the reason
+  // is the bundle's, and listing each member says nothing the count doesn't.
+  const singles = alwaysOn.filter((e: any) => !e.bundle);
+  const bundles = new Map<string, any[]>();
+  for (const e of alwaysOn) if (e.bundle) bundles.set(e.bundle, [...(bundles.get(e.bundle) || []), e]);
+  const rows: string[] = [];
+  for (const e of [...singles].sort((a: any, b: any) => a.name.localeCompare(b.name))) {
+    rows.push(`**${e.name}** (사유: ${e.reason})${SEP}${e.description_ko || e.description}`);
+  }
+  for (const [b, es] of bundles) {
+    const kinds = new Map<string, number>();
+    for (const e of es) kinds.set(e.type, (kinds.get(e.type) || 0) + 1);
+    const what = [...kinds].map(([k, n]) => `${TYPE_LABEL_KO[k] || k} ${n}개`).join(", ");
+    const why = ALWAYS_ON_REASON_KO[es[0].reason] || es[0].reason;
+    rows.push(`**${b} ${what}** (사유: ${es[0].reason})${SEP}${why} — 세부는 "멀티 스킬 플러그인" 참조`);
+  }
+  rows.forEach((r, i) => lines.push(`${i + 1}. ${r}`));
 
   // Preferences + savings are shared by the full and brief reports, so they
   // are built once into `tail` and appended to both.
@@ -509,7 +537,10 @@ function main() {
   for (const cat of CATEGORY_ORDER) {
     const m = meta[cat] || { label_ko: cat };
     const n = (reg[cat] || []).length;
-    const note = m.bundle ? ` — ${m.bundle.plugin_name} 플러그인 전체가 여기 분류됨` : "";
+    const ao = m.bundle?.agents_always_on;
+    const note = m.bundle
+      ? ` — ${m.bundle.plugin_name} 플러그인 전체가 여기 분류됨${ao ? ` (에이전트 ${ao.count}개는 스폰 비용 때문에 상시)` : ""}`
+      : "";
     const byType: Record<string, number> = {};
     for (const e of reg[cat] || []) byType[e.type || "skill"] = (byType[e.type || "skill"] || 0) + 1;
     const mix =

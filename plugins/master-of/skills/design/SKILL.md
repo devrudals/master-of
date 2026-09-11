@@ -1,6 +1,6 @@
 ---
 name: design
-description: "Gate for design/UI/motion skills (design-dna, motion-design, apple-design, emil-design-eng, taste, animate*, gsap-plugins, better-*, 21st, tailwind-design-system…). Open it yourself for clear WORK requests in this domain, not for questions or passing mentions — opening costs tokens. Whole design pipelines (paint/impeccable/image-to-code) are under 'pipelines'."
+description: "Gate for design/UI/motion skills (design-dna, motion-design, apple-design, emil-design-eng, taste, animate*, gsap-plugins, better-*, 21st, tailwind-design-system, component-scaffold, frontend/mobile-developer agents…). Open it yourself for clear WORK requests in this domain, not for questions or passing mentions — opening costs tokens. Whole design pipelines (paint/impeccable/image-to-code) are under 'pipelines'."
 allowed-tools: Read, Bash
 ---
 

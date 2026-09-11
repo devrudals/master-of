@@ -106,10 +106,16 @@ changes, and the fixes the health check points at.
   and `~/.claude/agents`. A gated command is activated by reading its prompt
   template; a gated agent by reading its system prompt and spawning a
   `general-purpose` agent with it. A gated skill that wants to spawn a gated
-  agent by `subagent_type` resolves it through the same gate index. The
-  one tradeoff the model will ask you about: a large agent set that gated
-  skills spawn often (a framework with 30 agents) costs a file read per
-  spawn once gated, which can exceed what it saves — you choose.
+  agent by `subagent_type` resolves it through the same gate index.
+- **The one thing deliberately NOT gated: agents that gated skills spawn
+  often.** A framework like GSD ships 65 skills and 34 agents the skills
+  spawn by `subagent_type`. Gating the agents would save ~2k tokens a
+  session, but each spawn would then cost a read of the agent's prompt
+  (4-12k tokens) — one phase run costs ten sessions' worth of the saving.
+  So the rule is: gate the skills, keep the agents always-on (`always_on`
+  with reason `spawn_cost`), and say so in the report. The model applies
+  this by default when it sees that shape; it asks only when the set is
+  small enough to be a toss-up.
 
 ## License
 
