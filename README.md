@@ -13,8 +13,8 @@ full registry) only when a task actually needs something in it.
 - **Domain gates** (`design`, `dev`, `research`, `stock`, `planning`,
   `pipelines` out of the box — you can add your own): each is a thin,
   always-on pointer. Opening one reads a small pre-rendered index for that
-  domain and activates just the 1-4 skills a task needs, not the whole
-  category.
+  domain and activates just the 1-4 components a task needs — skills,
+  commands or agents — not the whole category.
 - **`check-skills`**: brief status — per-gate skill counts, a health check
   (dead MCP server binaries, gated skills whose owning plugin is disabled so
   they can't actually work), current ambiguity-handling preferences, and a
@@ -101,10 +101,15 @@ changes, and the fixes the health check points at.
   see a permission prompt the skill wouldn't normally trigger), and
   `disable-model-invocation: true` skills are never auto-opened — they're
   offered by name for you to pick.
-- Only **skills** are scanned. A plugin that ships commands or agents but no
-  skills is never flagged and stays always-on; plugins that ship both get
-  their commands/agents gated as a side effect of the plugin being disabled.
-  Extending the scanner to commands and agents is the natural next step.
+- Skills, **commands** and **agents** are all scanned and gated — from
+  plugins (`skills/`, `commands/`, `agents/`) and from `~/.claude/commands`
+  and `~/.claude/agents`. A gated command is activated by reading its prompt
+  template; a gated agent by reading its system prompt and spawning a
+  `general-purpose` agent with it. A gated skill that wants to spawn a gated
+  agent by `subagent_type` resolves it through the same gate index. The
+  one tradeoff the model will ask you about: a large agent set that gated
+  skills spawn often (a framework with 30 agents) costs a file read per
+  spawn once gated, which can exceed what it saves — you choose.
 
 ## License
 

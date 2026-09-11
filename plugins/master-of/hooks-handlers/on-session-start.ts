@@ -50,6 +50,8 @@ const CLAUDE_DIR = join(HOME, ".claude");
 // marketplace install lives under ~/.claude/plugins/cache instead.
 const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || join(import.meta.dir, "..");
 const SKILLS_DIR = join(CLAUDE_DIR, "skills");
+const COMMANDS_DIR = join(CLAUDE_DIR, "commands");
+const AGENTS_DIR = join(CLAUDE_DIR, "agents");
 const INSTALLED_PLUGINS_FILE = join(CLAUDE_DIR, "plugins", "installed_plugins.json");
 const MASTEROF_DIR = join(CLAUDE_DIR, "masterof");
 const STATE_FILE = join(MASTEROF_DIR, "state.json");
@@ -109,22 +111,34 @@ const BULK_THRESHOLD = 5;
 // is tracked as data in registry.json's "always_on" array now, NOT hardcoded
 // here -- so classifying something as a permanent exemption is a JSON edit
 // `check-skills` makes, not a code change. Read it at scan time.
-function loadAlwaysOnExemptions(): { pluginIds: Set<string>; rawSkillNames: Set<string> } {
+function loadAlwaysOnExemptions(): {
+  pluginIds: Set<string>;
+  rawSkillNames: Set<string>;
+  rawCommandNames: Set<string>;
+  rawAgentNames: Set<string>;
+} {
   const pluginIds = new Set<string>();
   const rawSkillNames = new Set<string>();
+  const rawCommandNames = new Set<string>();
+  const rawAgentNames = new Set<string>();
   try {
     const reg = JSON.parse(readFileSync(REGISTRY_FILE, "utf8"));
     for (const e of reg.always_on || []) {
       if (e.type === "plugin" && e.identifier) pluginIds.add(e.identifier);
       if (e.type === "raw_skill" && e.identifier) rawSkillNames.add(e.identifier);
+      if (e.type === "raw_command" && e.identifier) rawCommandNames.add(e.identifier);
+      if (e.type === "raw_agent" && e.identifier) rawAgentNames.add(e.identifier);
     }
   } catch {
     // registry.json missing/malformed -> no exemptions beyond the pattern above.
     // Fails open (nothing exempt), not closed -- worst case something that
     // should be exempt gets flagged as "new" once, harmless.
   }
-  return { pluginIds, rawSkillNames };
+  return { pluginIds, rawSkillNames, rawCommandNames, rawAgentNames };
 }
+
+type Kind = "skill" | "command" | "agent";
+type Found = { path: string; source: string; type: Kind };
 
 // The frontmatter `description` is what classification actually needs
 // (which domain, is it a whole pipeline, should it be always-on). Shipping it
@@ -160,12 +174,42 @@ function isIgnoredRawSkill(name: string, rawSkillNames: Set<string>): boolean {
 }
 
 // Raw skills: every ~/.claude/skills/<name>/SKILL.md not in the ignore list.
-function scanRawSkills(rawSkillNames: Set<string>): { path: string; source: string }[] {
-  const out: { path: string; source: string }[] = [];
+function scanRawSkills(rawSkillNames: Set<string>): Found[] {
+  const out: Found[] = [];
   for (const name of safeReaddir(SKILLS_DIR)) {
     if (isIgnoredRawSkill(name, rawSkillNames)) continue;
     const skillMd = join(SKILLS_DIR, name, "SKILL.md");
-    if (existsSync(skillMd)) out.push({ path: skillMd, source: `raw:${name}` });
+    if (existsSync(skillMd)) out.push({ path: skillMd, source: `raw:${name}`, type: "skill" });
+  }
+  return out;
+}
+
+// Commands and agents are always-on the same way skills are: every
+// ~/.claude/commands/<x>.md is a slash command in every session, every
+// ~/.claude/agents/<x>.md is a subagent type listed in every system prompt.
+// A skill-only scan leaves those invisible -- which for a framework that
+// ships 30+ agents is a bigger always-on bill than its skills.
+function safeReadMdFiles(dir: string): string[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((d) => d.isFile() && d.name.endsWith(".md"))
+      .map((d) => d.name);
+  } catch {
+    return [];
+  }
+}
+
+function scanRawExtras(rawCommandNames: Set<string>, rawAgentNames: Set<string>): Found[] {
+  const out: Found[] = [];
+  for (const f of safeReadMdFiles(COMMANDS_DIR)) {
+    const name = f.slice(0, -3);
+    if (rawCommandNames.has(name)) continue;
+    out.push({ path: join(COMMANDS_DIR, f), source: `raw:${name}`, type: "command" });
+  }
+  for (const f of safeReadMdFiles(AGENTS_DIR)) {
+    const name = f.slice(0, -3);
+    if (rawAgentNames.has(name)) continue;
+    out.push({ path: join(AGENTS_DIR, f), source: `raw:${name}`, type: "agent" });
   }
   return out;
 }
@@ -173,8 +217,8 @@ function scanRawSkills(rawSkillNames: Set<string>): { path: string; source: stri
 // Plugin skills: every skill bundled in every *installed* plugin (regardless
 // of enabled/disabled state -- disabled plugins' files are still on disk and
 // still valid Read targets for a master-of gate).
-function scanPluginSkills(pluginIds: Set<string>): { path: string; source: string }[] {
-  const out: { path: string; source: string }[] = [];
+function scanPluginComponents(pluginIds: Set<string>): Found[] {
+  const out: Found[] = [];
   let installed: any;
   try {
     installed = JSON.parse(readFileSync(INSTALLED_PLUGINS_FILE, "utf8"));
@@ -191,7 +235,16 @@ function scanPluginSkills(pluginIds: Set<string>): { path: string; source: strin
     const skillsDir = join(installPath, "skills");
     for (const skillName of safeReaddir(skillsDir)) {
       const skillMd = join(skillsDir, skillName, "SKILL.md");
-      if (existsSync(skillMd)) out.push({ path: skillMd, source: `plugin:${pluginId}::${skillName}` });
+      if (existsSync(skillMd)) out.push({ path: skillMd, source: `plugin:${pluginId}::${skillName}`, type: "skill" });
+    }
+    // Standard plugin layout only (commands/*.md, agents/*.md). A manifest
+    // that points these at custom paths isn't followed -- rare, and a wrong
+    // guess would flag files that aren't components at all.
+    for (const f of safeReadMdFiles(join(installPath, "commands"))) {
+      out.push({ path: join(installPath, "commands", f), source: `plugin:${pluginId}::${f.slice(0, -3)}`, type: "command" });
+    }
+    for (const f of safeReadMdFiles(join(installPath, "agents"))) {
+      out.push({ path: join(installPath, "agents", f), source: `plugin:${pluginId}::${f.slice(0, -3)}`, type: "agent" });
     }
   }
   return out;
@@ -248,8 +301,12 @@ function loadRegisteredPaths(): { paths: Map<string, string>; ok: boolean } {
 
 function main() {
   bootstrapIfMissing();
-  const { pluginIds, rawSkillNames } = loadAlwaysOnExemptions();
-  const current = [...scanRawSkills(rawSkillNames), ...scanPluginSkills(pluginIds)];
+  const { pluginIds, rawSkillNames, rawCommandNames, rawAgentNames } = loadAlwaysOnExemptions();
+  const current: Found[] = [
+    ...scanRawSkills(rawSkillNames),
+    ...scanRawExtras(rawCommandNames, rawAgentNames),
+    ...scanPluginComponents(pluginIds),
+  ];
   const currentPaths = current.map((c) => c.path);
 
   const state = loadState();
@@ -312,9 +369,9 @@ function main() {
     );
   }
   if (added.length > 0) {
-    lines.push(`\n${added.length} SKILL.md source(s) on disk are not classified in registry.json:`);
+    lines.push(`\n${added.length} component(s) on disk are not classified in registry.json (type in brackets):`);
     for (const a of added) {
-      lines.push(`  - ${a.source}  (${a.path})`);
+      lines.push(`  - [${a.type}] ${a.source}  (${a.path})`);
       const d = frontmatterDescription(a.path);
       if (d) lines.push(`      ${d}`);
     }

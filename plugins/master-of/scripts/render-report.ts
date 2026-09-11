@@ -195,8 +195,16 @@ function commonDirPrefix(paths: string[]): string {
 function shortPath(p: string): string {
   return pathPrefix && p.startsWith(pathPrefix) ? p.slice(pathPrefix.length) : p;
 }
+// Non-skill entries are tagged so the gate knows how to activate them
+// without opening the file: a command's body is a prompt template to follow,
+// an agent's body is a system prompt to spawn with. Skills stay untagged --
+// they're the default and the majority.
+const TYPE_TAG_KO: Record<string, string> = { command: "[커맨드] ", agent: "[에이전트] " };
+function typeTag(e: any): string {
+  return TYPE_TAG_KO[e.type] || "";
+}
 function entryLine(e: any, cat: string): string {
-  return `${e.name} | ${e.description_ko || e.description}${userOnlyNote(e)}${depNote(cat, e)} | ${shortPath(e.path)}`;
+  return `${typeTag(e)}${e.name} | ${e.description_ko || e.description}${userOnlyNote(e)}${depNote(cat, e)} | ${shortPath(e.path)}`;
 }
 
 function renderCategoryBlock(cat: string, reg: any, meta: any): string[] {
@@ -214,6 +222,9 @@ function renderCategoryBlock(cat: string, reg: any, meta: any): string[] {
   } else {
     out.push(`# 형식: 이름 | 설명 | Read할 경로`);
   }
+  if ([...sorted, ...related].some((e: any) => e.type === "command" || e.type === "agent")) {
+    out.push(`# [커맨드] = 본문이 프롬프트 템플릿, 요청을 $ARGUMENTS로 넣고 따름 · [에이전트] = 본문이 시스템 프롬프트, general-purpose 에이전트에 넣어 스폰`);
+  }
   out.push("");
 
   if (cat === "planning") {
@@ -229,7 +240,7 @@ function renderCategoryBlock(cat: string, reg: any, meta: any): string[] {
       out.push("");
     }
   } else if (cat === "pipelines") {
-    for (const e of sorted) out.push(`${e.name} | (분야: ${e.domain}) ${e.description_ko || e.description}${userOnlyNote(e)}${depNote(cat, e)} | ${shortPath(e.path)}`);
+    for (const e of sorted) out.push(`${typeTag(e)}${e.name} | (분야: ${e.domain}) ${e.description_ko || e.description}${userOnlyNote(e)}${depNote(cat, e)} | ${shortPath(e.path)}`);
     out.push("");
   } else {
     for (const e of sorted) out.push(entryLine(e, cat));
@@ -239,14 +250,31 @@ function renderCategoryBlock(cat: string, reg: any, meta: any): string[] {
   // Inline this domain's pipelines so the protocol's scale cross-check needs
   // no second read. Skipped for the pipelines file itself (it IS the list).
   if (cat !== "pipelines") {
-    const related = (reg.pipelines || [])
+    const rel = (reg.pipelines || [])
       .filter((p: any) => p.domain === cat)
       .sort((a: any, b: any) => a.name.localeCompare(b.name));
-    if (related.length > 0) {
+    if (rel.length > 0) {
       out.push(`## 관련 파이프라인 — 요청이 "전체/처음부터 끝까지" 규모일 때만 대안으로 제시 (단일 선택)`);
-      for (const e of related) out.push(entryLine(e, "pipelines"));
+      for (const e of rel) out.push(entryLine(e, "pipelines"));
       out.push("");
     }
+  }
+
+  // Agents a skill/pipeline in this block spawns (`spawned_by`) are listed
+  // right here even if they're filed in another category, so "spawn
+  // impeccable-finish-reviewer" resolves from the gate the parent came
+  // through -- no _all.txt fallback read just to find a child agent.
+  const namesHere = new Set<string>([...sorted, ...related].map((e: any) => e.name));
+  const children: any[] = [];
+  for (const k of CATEGORY_ORDER) {
+    for (const e of reg[k] || []) {
+      if (e.spawned_by && namesHere.has(e.spawned_by) && !namesHere.has(e.name)) children.push(e);
+    }
+  }
+  if (children.length > 0) {
+    out.push(`## 위 항목이 스폰하는 에이전트 — 부모 스킬이 subagent_type으로 요구하면 여기서 찾아 general-purpose로 스폰`);
+    for (const e of children.sort((a, b) => a.name.localeCompare(b.name))) out.push(entryLine(e, cat));
+    out.push("");
   }
   return out;
 }
@@ -335,13 +363,19 @@ function main() {
     lines.push("");
     lines.push(`## ${m.label_ko}`);
     lines.push("");
-    lines.push(`${m.desc_ko} — 총 ${entries.length}개`);
+    const byTypeF: Record<string, number> = {};
+    for (const e of entries) byTypeF[e.type || "skill"] = (byTypeF[e.type || "skill"] || 0) + 1;
+    const mixF =
+      Object.keys(byTypeF).length > 1
+        ? ` (스킬 ${byTypeF.skill || 0} · 커맨드 ${byTypeF.command || 0} · 에이전트 ${byTypeF.agent || 0})`
+        : "";
+    lines.push(`${m.desc_ko} — 총 ${entries.length}개${mixF}`);
 
     const sortByName = (arr: any[]) => [...arr].sort((a, b) => a.name.localeCompare(b.name));
     const numbered = (items: any[], extra?: (e: any) => string) => {
       sortByName(items).forEach((e, i) => {
         const tag = extra ? ` ${extra(e)}` : "";
-        lines.push(`${i + 1}. **${e.name}**${tag}${SEP}${e.description_ko || e.description}`);
+        lines.push(`${i + 1}. ${typeTag(e)}**${e.name}**${tag}${SEP}${e.description_ko || e.description}`);
       });
     };
 
@@ -449,7 +483,7 @@ function main() {
   );
   const pad = (n: number) => n.toLocaleString().padStart(width);
   tail.push("```");
-  tail.push(`  ${pad(beforeTokens)} tok   게이트 적용 전 (스킬 ${gatedCount}개가 전부 평소에 노출됐다면)`);
+  tail.push(`  ${pad(beforeTokens)} tok   게이트 적용 전 (구성요소 ${gatedCount}개가 전부 평소에 노출됐다면)`);
   tail.push(`− ${pad(afterTokens)} tok   게이트 적용 후 (지금, 게이트 ${GATE_FILES.length}개만 노출)`);
   tail.push(`${"─".repeat(width + 6)}`);
   tail.push(`  ${pad(savings)} tok   절약 (${savingsPct}% 감소)`);
@@ -476,7 +510,13 @@ function main() {
     const m = meta[cat] || { label_ko: cat };
     const n = (reg[cat] || []).length;
     const note = m.bundle ? ` — ${m.bundle.plugin_name} 플러그인 전체가 여기 분류됨` : "";
-    brief.push(`- **/${cat}** ${m.label_ko}: ${n}개${note}`);
+    const byType: Record<string, number> = {};
+    for (const e of reg[cat] || []) byType[e.type || "skill"] = (byType[e.type || "skill"] || 0) + 1;
+    const mix =
+      Object.keys(byType).length > 1
+        ? ` (스킬 ${byType.skill || 0} · 커맨드 ${byType.command || 0} · 에이전트 ${byType.agent || 0})`
+        : "";
+    brief.push(`- **/${cat}** ${m.label_ko}: ${n}개${mix}${note}`);
   }
   brief.push(`- **상시 활성** (게이트 없음): ${alwaysOn.length}개`);
   brief.push("");

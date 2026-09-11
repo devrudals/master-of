@@ -38,7 +38,17 @@ Proceed to Step 1 if it reports anything, otherwise skip straight to Step 2.
 
 ## Step 1 — classify what the scan found
 
-For each newly-found `SKILL.md`:
+The scan covers three component kinds, and the hook tags each line with
+its type: `[skill]` (a `SKILL.md`), `[command]` (a `commands/<name>.md` —
+a slash command's prompt template), `[agent]` (an `agents/<name>.md` — a
+subagent's system prompt). All three cost always-on tokens and all three
+are gated into the same domain categories; record `type` on the entry
+(`"command"` / `"agent"`; omit for skills). Classify a command or agent by
+what it *does*, same as a skill — a command that scaffolds React
+components is `design`, an agent that reviews a finished build is whatever
+domain that build is in.
+
+For each newly-found component:
 
 1. `Read` it.
 2. Pick the best-fitting category in `~/.claude/masterof/registry.json`
@@ -53,7 +63,22 @@ For each newly-found `SKILL.md`:
 3. Decide how to make it dormant:
    - **Raw skill** (folder directly under `~/.claude/skills/`): move it into
      `~/.claude/skills-library/<category>/`.
-   - **Plugin-provided skill**: don't move anything — plugin files are
+   - **Raw command / raw agent** (`~/.claude/commands/<name>.md`,
+     `~/.claude/agents/<name>.md`): move the file into
+     `~/.claude/skills-library/<category>/_commands/` or `_agents/`. The
+     `_`-prefixed dirs keep them apart from skill folders in the same
+     category.
+   - **Agents that gated skills spawn — decide as a set, and ask.** A
+     framework often ships N skills plus M agents those skills spawn by
+     `subagent_type`. Gating the agents saves their always-on cost, but every
+     spawn from a gated skill then costs a parent-side `Read` of the agent's
+     file (~1-3k tokens each). For a small set that's fine; for a large,
+     frequently-spawned set (10+ agents, several spawns per workflow run)
+     it can cost more per session than it saves. Quantify both sides in one
+     line (always-on saving vs. reads per typical run) and let the user
+     pick: gate them, or file them in `always_on` with reason
+     `spawn_cost`. Don't decide this one silently either way.
+   - **Plugin-provided component** (skill, command or agent): don't move anything — plugin files are
      addressed in place. Run `claude plugin disable <plugin>@<marketplace>`
      instead. A single plugin can bundle skills that belong in *different*
      categories (e.g. `interfaces` bundles 10, all filed under `design`) —
@@ -159,7 +184,12 @@ removing an exemption is a JSON edit here, never a code change. Current
 - `near_zero_cost` (`perplexity`): MCP-only, measured always-on cost ~0 tok.
 - `silent_opportunistic` (`gemini-lookup`): designed to fire without the user
   ever naming it (auto-delegate simple lookups to save tokens) — gating it
-  behind a a master-of gate call the user doesn't know exists defeats its purpose.
+  behind a master-of gate call the user doesn't know exists defeats its purpose.
+- `spawn_cost` (an agent set): agents that gated skills spawn so often that
+  reading each one's file per spawn would cost more than keeping them
+  always-on. Recorded per agent as `{type: "raw_agent", identifier:
+  "<name>", reason: "spawn_cost"}` (or `raw_command` for a command kept for
+  the same reason), after the user chose it — see Step 1.
 
 When classifying a newly-found skill/plugin, ask whether it fits one of these
 same *characteristics* (not just whether it happens to resemble one of the

@@ -111,6 +111,29 @@ than opening. Once a gate is open:
      on your own judgment. Opening a gate yourself (the auto-open rule) does
      not lift that: if the best match carries this flag and the user didn't
      name it, mention it as an option and let them choose; don't activate it.
+   **Commands and agents are gated the same way, and the index tags them.**
+   Plugins ship more than skills, and every command and agent costs
+   always-on tokens exactly like a skill does, so they're classified into
+   the same gates. An index line starting `[커맨드]` or `[에이전트]` is
+   activated differently from a skill:
+   - `[커맨드]` → `Read` it. The body is the prompt a `/name args` invocation
+     would have run; `$ARGUMENTS` is the user's request (same rule as
+     above). Follow it as those instructions, base directory rule included.
+   - `[에이전트]` → `Read` it. The frontmatter's `description`/`tools`/
+     `model` and the body (its system prompt) are what the harness would
+     have used to register it as a `subagent_type`. Since it isn't
+     registered, spawn it yourself: `Agent` with `subagent_type:
+     "general-purpose"`, `prompt` = the body followed by the concrete task,
+     `model` = the frontmatter's if it names one you can pass, and the
+     `tools` line restated inside the prompt as a constraint ("only use
+     …"). Say once that you're running it this way.
+   - **A gated skill that says "spawn `subagent_type: X`"** where X isn't in
+     the available agent types is *not* broken: check the current gate's
+     index (then `_all.txt`) for `[에이전트] X` and run it as above. This is
+     the normal path for frameworks whose skills and agents were gated
+     together. It costs one `Read` of X's file per spawn on your side — a
+     framework that spawns many agents per workflow pays that each time,
+     which is why `check-skills` asks before gating a large agent set.
    **Honor `[의존: …]` notes.** An index line can carry
    `[의존: <plugin> <component> — 현재 꺼짐, 없으면 동작 불가]`. That means the
    skill's plugin is disabled, so the MCP server / agents it needs don't
