@@ -1,6 +1,6 @@
 ---
 name: research
-description: "On-demand gate for research/web-scraping skills (firecrawl family, modlens, task-observer). Open this gate yourself when the user asks for actual WORK that clearly belongs to this domain ("이 화면 다듬어줘", "애니메이션 개선해줘") — you no longer need them to type /research first. Do NOT open it for questions, explanations, or chat that merely mention the topic; opening costs tokens, so it must be a task you're about to do."
+description: "Gate for research/web-scraping skills (firecrawl family, modlens, task-observer). Open it yourself for clear WORK requests in this domain, not for questions or passing mentions — opening costs tokens."
 allowed-tools: Read, Bash
 ---
 

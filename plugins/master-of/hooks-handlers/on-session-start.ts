@@ -44,6 +44,11 @@ import { checkHealth } from "../scripts/health";
 
 const HOME = homedir();
 const CLAUDE_DIR = join(HOME, ".claude");
+// Where this plugin is installed. The harness sets CLAUDE_PLUGIN_ROOT for
+// plugin hooks; when run by hand (check-skills' Step 0) fall back to this
+// file's own location. Never a fixed ~/.claude/skills/... path -- a
+// marketplace install lives under ~/.claude/plugins/cache instead.
+const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || join(import.meta.dir, "..");
 const SKILLS_DIR = join(CLAUDE_DIR, "skills");
 const INSTALLED_PLUGINS_FILE = join(CLAUDE_DIR, "plugins", "installed_plugins.json");
 const MASTEROF_DIR = join(CLAUDE_DIR, "masterof");
@@ -52,7 +57,7 @@ const REGISTRY_FILE = join(MASTEROF_DIR, "registry.json");
 const PREFS_FILE = join(MASTEROF_DIR, "preferences.json");
 
 // The six domain gates this plugin ships (design/dev/research/stock/planning/
-// pipelines -- each a real ~/.claude/skills/master-of/skills/<cat>/SKILL.md
+// pipelines -- each a real <plugin root>/skills/<cat>/SKILL.md
 // file) need a matching registry.json entry to classify anything into, or
 // every scan finds "added" skills with nowhere to put them. A fresh install
 // (or a registry.json a user deleted by hand) has no such file, and without
@@ -89,9 +94,15 @@ function bootstrapIfMissing() {
 }
 
 // This plugin's own top-level directory is always exempt by exact name --
-// its gate skills live nested under ~/.claude/skills/master-of/skills/, not
+// its gate skills live nested under <plugin root>/skills/, not
 // as top-level dirs themselves, so this only ever needs to match the one name.
 const IGNORED_SKILL_DIR_PATTERNS = [/^master-of$/];
+
+// At or above this many unclassified skills in one scan, the hook tells the
+// model to confirm the plan with the user before moving/disabling anything.
+// One or two new skills after an install is routine; thirty on a fresh
+// install is the user's whole skill library being reorganized.
+const BULK_THRESHOLD = 5;
 
 // Everything else that's permanently exempt (hook-dependent plugins,
 // output-style/near-zero-cost plugins, silently-opportunistic raw skills)
@@ -113,6 +124,24 @@ function loadAlwaysOnExemptions(): { pluginIds: Set<string>; rawSkillNames: Set<
     // should be exempt gets flagged as "new" once, harmless.
   }
   return { pluginIds, rawSkillNames };
+}
+
+// The frontmatter `description` is what classification actually needs
+// (which domain, is it a whole pipeline, should it be always-on). Shipping it
+// in the hook output means a fresh install with 50 skills classifies from
+// ~50 short lines instead of 50 full-file Reads -- the difference between a
+// first session that costs ~3k tokens and one that costs ~100k.
+function frontmatterDescription(path: string): string {
+  try {
+    const text = readFileSync(path, "utf8");
+    const fm = text.match(/^---\n([\s\S]*?)\n---/);
+    if (!fm) return "";
+    const m = fm[1].match(/^description:\s*["']?([\s\S]*?)["']?\s*$/m);
+    const d = (m ? m[1] : "").replace(/\s+/g, " ").trim();
+    return d.length > 240 ? d.slice(0, 237) + "..." : d;
+  } catch {
+    return "";
+  }
 }
 
 function safeReaddir(dir: string): string[] {
@@ -274,21 +303,38 @@ function main() {
     lines.push("");
   }
   lines.push("master-of: registry.json is out of sync with what's on disk.");
+  if (added.length >= BULK_THRESHOLD) {
+    lines.push(
+      `\nThis is a bulk change (${added.length} unclassified) -- most likely a first run. ` +
+        "Classify them all, but BEFORE moving any folders or disabling any plugin, show the " +
+        "user a one-line plan (what goes where, which plugins get disabled) and get a yes. " +
+        "Bulk filesystem changes in someone's first session without asking is not 'routine'."
+    );
+  }
   if (added.length > 0) {
     lines.push(`\n${added.length} SKILL.md source(s) on disk are not classified in registry.json:`);
-    for (const a of added) lines.push(`  - ${a.source}  (${a.path})`);
+    for (const a of added) {
+      lines.push(`  - ${a.source}  (${a.path})`);
+      const d = frontmatterDescription(a.path);
+      if (d) lines.push(`      ${d}`);
+    }
   }
   if (removed.length > 0) {
     lines.push(`\n${removed.length} registry.json entr(ies) point at a path that no longer exists:`);
     for (const r of removed) lines.push(`  - ${r}`);
   }
   lines.push(
-    "\nRead ~/.claude/skills/master-of/skills/check-skills/SKILL.md " +
+    `\nRead ${PLUGIN_ROOT}/skills/check-skills/SKILL.md ` +
       "(the 'check-skills' skill) and follow Step 1 there to classify the " +
-      "additions and prune the removals into ~/.claude/masterof/registry.json. Do this " +
-      "before moving on to whatever the user actually asked for this session, unless " +
-      "it's clearly urgent -- a short heads-up about what got filed where is enough, " +
-      "no need to ask permission for routine classification."
+      "additions and prune the removals into ~/.claude/masterof/registry.json. The " +
+      "description under each addition is usually enough to classify it -- Read the " +
+      "SKILL.md itself only when it isn't. Do this before moving on to whatever the " +
+      "user actually asked for this session, unless it's clearly urgent -- a short " +
+      "heads-up about what got filed where is enough, no need to ask permission for " +
+      "routine classification. If classifying involved `claude plugin disable` or moving " +
+      "a skill into ~/.claude/skills-library, say so and tell the user those take effect " +
+      "at the NEXT session start (the current session still has them loaded). " +
+      `Scripts that file refers to as <plugin root>/... live under ${PLUGIN_ROOT}.`
   );
 
   process.stdout.write(

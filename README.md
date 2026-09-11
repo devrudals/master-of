@@ -57,6 +57,28 @@ your installed skills for classification.
 4. **You ask "what's gated?"** → `check-skills` answers from a cached report,
    not by re-deriving anything from the registry live.
 
+## How much you have to do
+
+Almost nothing, by design:
+
+- **Install → restart.** The first session's hook lists every unclassified
+  skill with its description; the model classifies them from that (no file
+  reads), shows you a one-line plan for anything bulk (5+ skills), and after
+  a yes makes them dormant. One more restart and the saving is live.
+- **Ask for work.** Gates open themselves on clear work requests ("이 화면
+  다듬어줘") — you don't type `/design`. Questions and mentions don't open
+  anything.
+- **Install more plugins later.** The next session's hook flags them; the
+  model files them; you get a heads-up, not a task.
+- **When something's ambiguous** the model asks (default) — or, if you tell
+  it once, uses a fixed default / a rule / its own judgment per domain.
+- **When something's broken** (a dead MCP binary, a gated skill whose plugin
+  is off) you get one line at session start with the fix. Nothing is changed
+  behind your back, because those fixes only apply at the next restart.
+
+What you still own: the one-time first-run yes, restarts after enable/disable
+changes, and the fixes the health check points at.
+
 ## Notes for other installs
 
 - The six default domain gates (and their example skills mentioned in a
@@ -73,6 +95,16 @@ your installed skills for classification.
   plugin ships (MCP servers, agents). `check-skills`'s health check flags
   this when it makes a gated skill non-functional, but does not work around
   it — some skills genuinely need their plugin enabled to do anything.
+- A gated skill is activated by reading its `SKILL.md`, not by the `Skill`
+  tool, so `$ARGUMENTS` isn't substituted (the protocol tells the model to
+  supply it from your request), `allowed-tools` doesn't pre-approve (you may
+  see a permission prompt the skill wouldn't normally trigger), and
+  `disable-model-invocation: true` skills are never auto-opened — they're
+  offered by name for you to pick.
+- Only **skills** are scanned. A plugin that ships commands or agents but no
+  skills is never flagged and stays always-on; plugins that ship both get
+  their commands/agents gated as a side effect of the plugin being disabled.
+  Extending the scanner to commands and agents is the natural next step.
 
 ## License
 

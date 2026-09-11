@@ -1,6 +1,6 @@
 ---
 name: dev
-description: "On-demand gate for dev-tooling skills (agent-browser, playwright-cli, mcp-builder, antigravity-bulk, find-skill/claude-skill-find-skill for finding+installing new Claude Code skills, omniroute-admin for OmniRoute CLI status). Open this gate yourself when the user asks for actual WORK that clearly belongs to this domain ("이 화면 다듬어줘", "애니메이션 개선해줘") — you no longer need them to type /dev first. Do NOT open it for questions, explanations, or chat that merely mention the topic; opening costs tokens, so it must be a task you're about to do."
+description: "Gate for dev-tooling skills (agent-browser, playwright-cli, mcp-builder, antigravity-bulk, find-skill for finding+installing Claude Code skills, omniroute-admin). Open it yourself for clear WORK requests in this domain, not for questions or passing mentions — opening costs tokens."
 allowed-tools: Read, Bash
 ---
 

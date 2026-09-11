@@ -1,6 +1,6 @@
 ---
 name: planning
-description: "On-demand gate for project-management/planning skills (this author's own registry classifies GSD's gsd-* skills here as the default example — planning, execution, review, milestones, etc; classify your own planning-tool skills here too via check-skills). Open this gate yourself when the user asks for actual WORK that clearly belongs to this domain ("이 화면 다듬어줘", "애니메이션 개선해줘") — you no longer need them to type /planning first. Do NOT open it for questions, explanations, or chat that merely mention the topic; opening costs tokens, so it must be a task you're about to do. Supersedes gsd-surface, which is itself one of the gated skills now."
+description: "Gate for project-management/planning skills (this author's registry files GSD's gsd-* skills here — planning, execution, review, milestones; classify your own planning tools here via check-skills). Open it yourself for clear WORK requests in this domain, not for questions or passing mentions — opening costs tokens."
 allowed-tools: Read, Bash
 ---
 

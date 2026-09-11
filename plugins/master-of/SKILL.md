@@ -1,6 +1,6 @@
 ---
 name: master-of
-description: "Cross-domain entry point for the master-of skill-gate system: use this when a request needs dormant skills from SEVERAL domains at once (e.g. scrape a competitor AND critique its design, review a UI AND its copy) and you'd otherwise have to invoke /design, /research, /dev, /stock, /planning, /pipelines one at a time. Matches across every category and activates the 1-4 skills that fit, from however many domains. For a request that clearly sits in one domain, invoke that single gate instead; for management/status (scanning, classifying, reporting), invoke 'check-skills'."
+description: "Cross-domain entry point for the master-of skill-gate system: use this when a request needs dormant skills from SEVERAL domains at once (e.g. scrape a competitor AND critique its design, review a UI AND its copy) and you'd otherwise have to invoke /design, /research, /dev, /stock, /planning, /pipelines one at a time. Also the entry point for any category that has no gate of its own (one added later via check-skills). Matches across every category and activates the 1-4 skills that fit, from however many domains. For a request that clearly sits in one of the six built-in domains, invoke that single gate instead; for management/status (scanning, classifying, reporting), invoke 'check-skills'."
 allowed-tools: Read
 ---
 
@@ -95,6 +95,22 @@ than opening. Once a gate is open:
    directory, and resolve every relative path in its body against it. State it
    once when you activate ("base: `…/skills-library/design/animate/`") so it's
    explicit rather than re-derived each time you follow a reference.
+   **Reading a skill is not the same as invoking it — three things the
+   `Skill` tool would have done for you that you now do yourself:**
+   - `$ARGUMENTS` is not substituted. Many skills (every GSD skill, for
+     one) say things like "Phase number: $ARGUMENTS". Treat whatever the
+     user gave after the skill's name — or the specific thing they asked for
+     — as that value, and if the skill needs an argument the user didn't
+     supply, ask for it the way the skill itself says to (most say what to
+     do when it's omitted).
+   - `allowed-tools` in the frontmatter doesn't pre-approve anything. The
+     skill will work; you may just get permission prompts it wouldn't
+     normally trigger. Don't read that as the skill being broken.
+   - `disable-model-invocation: true` in the frontmatter means the author
+     wants it run only when the user explicitly asks for it BY NAME — never
+     on your own judgment. Opening a gate yourself (the auto-open rule) does
+     not lift that: if the best match carries this flag and the user didn't
+     name it, mention it as an option and let them choose; don't activate it.
    **Honor `[의존: …]` notes.** An index line can carry
    `[의존: <plugin> <component> — 현재 꺼짐, 없으면 동작 불가]`. That means the
    skill's plugin is disabled, so the MCP server / agents it needs don't

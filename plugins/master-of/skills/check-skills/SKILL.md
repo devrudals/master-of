@@ -20,12 +20,18 @@ Two ways it runs:
   first (step 0 below), then always show the report (step 2), regardless of
   whether anything changed.
 
+**`<plugin root>` below** means this plugin's install directory: two levels
+above this skill's own base directory (the "Base directory for this skill"
+line you got when invoked, minus `/skills/check-skills`), or the root the
+SessionStart hook named in its message. It is NOT a fixed path — a
+skills-dir checkout and a marketplace install live in different places.
+
 ## Step 0 — manual scan (on-demand invocations only)
 
 If you were invoked directly by the user rather than by the hook's injected
 context, run the scan yourself before reporting:
 ```
-bun ~/.claude/skills/master-of/hooks-handlers/on-session-start.ts
+bun <plugin root>/hooks-handlers/on-session-start.ts
 ```
 Its stdout tells you what's new/gone, exactly like the automatic hook would.
 Proceed to Step 1 if it reports anything, otherwise skip straight to Step 2.
@@ -62,8 +68,10 @@ For each newly-found `SKILL.md`:
    otherwise `false` (body still useful, some sub-features off). The health
    check reads this field; nothing else knows a skill is hollow.
 5. Append `{name, description, description_<lang>, path}` (plus `cluster` for
-   `planning` entries — check `~/.claude/gsd-core/bin/lib/clusters.cjs`,
-   stripping the `gsd-` prefix to match, default `"utility"`; plus `domain`
+   `planning` entries — if GSD is installed, its own taxonomy is in
+   `~/.claude/gsd-core/bin/lib/clusters.cjs` (strip the `gsd-` prefix to
+   match); otherwise pick from the cluster names the planning gate lists, or
+   default `"utility"`; plus `domain`
    for `pipelines` entries — which existing category's requests should also
    surface this pipeline as an alternative, see `pipelines` for how
    that's used) to the right array in `registry.json`. `<lang>` is whatever
@@ -79,19 +87,27 @@ For each newly-found `SKILL.md`:
    domain assignment.
 7. If nothing fits, create a new category (named plainly after the domain,
    the same way `design`/`dev`/`research`/`stock`/`planning` are — no prefix):
-   - Add the array to `registry.json`.
-   - Scaffold `~/.claude/skills/master-of/skills/<new-category-name>/SKILL.md`
-     (copy `dev`'s structure — it's the simplest) pointing at the
-     shared Activation Protocol in the parent `../../SKILL.md`, with
-     `name: <new-category-name>` in its frontmatter.
-   - Add `"./skills/<new-category-name>"` to `skills` in `.claude-plugin/plugin.json`.
+   - Add the array to `registry.json`, plus a `category_meta.<name>` entry
+     with `label_ko`/`desc_ko`, and a `preferences.json` entry
+     (`{"mode": "always_ask"}`).
+   - That's all that's needed: the renderer emits `gates/<name>.txt` for it
+     and the root `master-of` skill routes to it (its description covers
+     "a category with no gate of its own"). A dedicated `/master-of:<name>`
+     gate would need a new `skills/<name>/SKILL.md` in the plugin source
+     itself — don't write into the install directory (a marketplace update
+     would wipe it); if the user wants one, that's a fork/PR of the plugin.
 8. **Keep the gate's own description in sync.** A domain gate's frontmatter
    `description` is the only thing visible in the system prompt — if it
    doesn't name a newly-added member, the model has no reason to ever open
    that gate for a matching request. Update it when relevant.
 9. Mention briefly what got filed where — no permission needed for routine
-   classification. Ask only if a skill's category is genuinely ambiguous, or
-   it looks like it needs a domain the user hasn't defined yet.
+   classification (a few new skills). Ask only if a skill's category is
+   genuinely ambiguous, or it looks like it needs a domain the user hasn't
+   defined yet. **Exception — bulk changes (5+ at once, i.e. a first run):**
+   classify them all, then show a one-line plan (what goes where, which
+   plugins get disabled, which folders move) and get a yes BEFORE touching
+   the filesystem or running `claude plugin disable`. Reorganizing someone's
+   whole skill library in their first session without asking is not routine.
 
 For paths that vanished (uninstalled/deleted): remove the matching
 `registry.json` entries (domain categories AND `always_on`). If a category
@@ -102,7 +118,7 @@ empties out, leave the empty array and gate in place rather than deleting it
 (new classification, removal, a category added, a preference mode changed),
 regenerate the cached renders before finishing:
 ```
-bun ~/.claude/skills/master-of/scripts/render-report.ts
+bun <plugin root>/scripts/render-report.ts
 ```
 That one command rebuilds BOTH `report.txt` (this skill's Step 2) and
 `~/.claude/masterof/gates/*.txt` (the per-gate activation indexes every domain
@@ -231,7 +247,7 @@ hide.
 
 If `report.txt` is missing or looks stale relative to `registry.json` (e.g.
 you just classified something in Step 1 and haven't regenerated it yet), run
-`bun ~/.claude/skills/master-of/scripts/render-report.ts` first, then Read
+`bun <plugin root>/scripts/render-report.ts` first, then Read
 and show it.
 
 If the user asks about something that isn't in `registry.json` at all

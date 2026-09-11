@@ -27,7 +27,10 @@ const CONFIG_FILE = join(MASTEROF_DIR, "config.json");
 const OUT_FILE = join(MASTEROF_DIR, "report.txt");
 const BRIEF_FILE = join(MASTEROF_DIR, "report-brief.txt");
 const GATES_DIR = join(MASTEROF_DIR, "gates");
-const SKILLS_ROOT = join(homedir(), ".claude", "skills", "master-of");
+// The plugin's own root, derived from this script's location rather than a
+// fixed path: a skills-dir checkout lives at ~/.claude/skills/master-of, a
+// marketplace install at ~/.claude/plugins/cache/<marketplace>/master-of/<ver>.
+const SKILLS_ROOT = join(import.meta.dir, "..");
 const THIS_SCRIPT_LOCALE = "ko"; // this renderer's hardcoded labels are Korean
 
 const CATEGORY_ORDER = ["design", "dev", "research", "stock", "planning", "pipelines"];
@@ -55,6 +58,9 @@ const GATE_FILES = [
 // and may differ from actual usage" disclaimer). Good enough for an
 // order-of-magnitude savings figure, not exact accounting.
 const CHARS_PER_TOKEN = 4;
+// Hangul/CJK tokenizes far denser than ASCII -- checked against what
+// `claude plugin details` reports for these same gate descriptions.
+const CJK_CHARS_PER_TOKEN = 1.5;
 
 function extractDescription(path: string): string {
   try {
@@ -68,8 +74,10 @@ function extractDescription(path: string): string {
   }
 }
 
-function estimateTokens(charCount: number): number {
-  return Math.round(charCount / CHARS_PER_TOKEN);
+function estimateTokens(text: string): number {
+  let cjk = 0;
+  for (const ch of text) if (ch.charCodeAt(0) > 0x1100) cjk++;
+  return Math.round(cjk / CJK_CHARS_PER_TOKEN + (text.length - cjk) / CHARS_PER_TOKEN);
 }
 
 const CLUSTER_LABELS_KO: Record<string, string> = {
@@ -144,6 +152,22 @@ const SEP = " | ";
 // even a stale "꺼짐" is enough to make the gate pause and check before
 // activating a skill that can't work.
 let brokenDeps = new Set<string>(); // "<cat>/<name>" with a disabled dependency
+
+// `disable-model-invocation: true` in a skill's frontmatter means its author
+// wants it run only when the user names it -- never on the model's own
+// judgment. That matters more here than for a normal skill, because a gate
+// now opens itself on clear work requests; the flag has to be visible in the
+// index so the model can decline to auto-activate without first reading the
+// skill (which would already be the cost we're avoiding).
+function userOnlyNote(e: any): string {
+  try {
+    const fm = readFileSync(e.path, "utf8").split("---")[1] || "";
+    return /^disable-model-invocation:\s*true/m.test(fm) ? " [사용자 지명 시에만]" : "";
+  } catch {
+    return "";
+  }
+}
+
 function depNote(cat: string, e: any): string {
   const r = e.requires;
   if (!r?.plugin) return "";
@@ -151,20 +175,46 @@ function depNote(cat: string, e: any): string {
   const what = (r.components || []).join(", ");
   return ` [의존: ${r.plugin} ${what}${off ? " — 현재 꺼짐" : ""}${r.critical ? ", 없으면 동작 불가" : ""}]`;
 }
+// Every entry's path is absolute (Read needs that), and within one gate most
+// of them share a long common directory. Factoring that prefix out into one
+// header line and writing each entry's path relative to it cuts ~40% off
+// the biggest gate file (planning: 65 entries all under one library dir)
+// with no change to the protocol -- the header says exactly how to rebuild
+// the absolute path. Entries outside the prefix keep their full path.
+let pathPrefix = "";
+function commonDirPrefix(paths: string[]): string {
+  if (paths.length < 2) return "";
+  const parts = paths.map((p) => p.split("/"));
+  const first = parts[0];
+  let n = 0;
+  while (n < first.length - 1 && parts.every((q) => q[n] === first[n])) n++;
+  const prefix = first.slice(0, n).join("/");
+  // Only worth it if it actually saves something per line.
+  return prefix.length >= 20 ? prefix + "/" : "";
+}
+function shortPath(p: string): string {
+  return pathPrefix && p.startsWith(pathPrefix) ? p.slice(pathPrefix.length) : p;
+}
 function entryLine(e: any, cat: string): string {
-  return `${e.name} | ${e.description_ko || e.description}${depNote(cat, e)} | ${e.path}`;
+  return `${e.name} | ${e.description_ko || e.description}${userOnlyNote(e)}${depNote(cat, e)} | ${shortPath(e.path)}`;
 }
 
 function renderCategoryBlock(cat: string, reg: any, meta: any): string[] {
   const entries = reg[cat] || [];
   const m = meta[cat] || { label_ko: cat, desc_ko: "" };
   const out: string[] = [];
+  const sorted = [...entries].sort((a, b) => a.name.localeCompare(b.name));
+  const related = cat === "pipelines" ? [] : (reg.pipelines || []).filter((p: any) => p.domain === cat);
+  pathPrefix = commonDirPrefix([...sorted, ...related].map((e: any) => e.path));
+
   out.push(`# ${cat} — ${m.label_ko} (${entries.length}개)`);
   out.push(`# ${m.desc_ko}`);
-  out.push(`# 형식: 이름 | 설명 | Read할 경로`);
+  if (pathPrefix) {
+    out.push(`# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 ${pathPrefix} 를 붙여 Read`);
+  } else {
+    out.push(`# 형식: 이름 | 설명 | Read할 경로`);
+  }
   out.push("");
-
-  const sorted = [...entries].sort((a, b) => a.name.localeCompare(b.name));
 
   if (cat === "planning") {
     const byCluster = new Map<string, any[]>();
@@ -179,7 +229,7 @@ function renderCategoryBlock(cat: string, reg: any, meta: any): string[] {
       out.push("");
     }
   } else if (cat === "pipelines") {
-    for (const e of sorted) out.push(`${e.name} | (분야: ${e.domain}) ${e.description_ko || e.description}${depNote(cat, e)} | ${e.path}`);
+    for (const e of sorted) out.push(`${e.name} | (분야: ${e.domain}) ${e.description_ko || e.description}${userOnlyNote(e)}${depNote(cat, e)} | ${shortPath(e.path)}`);
     out.push("");
   } else {
     for (const e of sorted) out.push(entryLine(e, cat));
@@ -375,12 +425,12 @@ function main() {
   let gatedCount = 0;
   for (const cat of CATEGORY_ORDER) {
     for (const e of reg[cat] || []) {
-      beforeTokens += estimateTokens((e.description || "").length);
+      beforeTokens += estimateTokens(e.description || "");
       gatedCount++;
     }
   }
   let afterTokens = 0;
-  for (const f of GATE_FILES) afterTokens += estimateTokens(extractDescription(f).length);
+  for (const f of GATE_FILES) afterTokens += estimateTokens(extractDescription(f));
   const savings = beforeTokens - afterTokens;
   const savingsPct = beforeTokens > 0 ? Math.round((savings / beforeTokens) * 100) : 0;
 
@@ -405,7 +455,7 @@ function main() {
   tail.push(`  ${pad(savings)} tok   절약 (${savingsPct}% 감소)`);
   tail.push("```");
   tail.push("");
-  tail.push("*문자수/4로 어림한 추정치입니다 — 실제 토큰화 결과와 다를 수 있음. always_on 항목은 게이트 여부와 무관하게 원래도 켜져있었으므로 이 계산에서 제외.*");
+  tail.push("*문자수 기반 추정치입니다 (영문 4자/한글 1.5자 ≈ 1 tok) — 실제 토큰화 결과와 다를 수 있음. always_on 항목은 게이트 여부와 무관하게 원래도 켜져있었으므로 이 계산에서 제외.*");
   tail.push("");
   tail.push(`*(생성 시각: ${new Date().toISOString()})*`);
 

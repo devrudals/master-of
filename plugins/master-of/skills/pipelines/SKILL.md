@@ -1,6 +1,6 @@
 ---
 name: "pipelines"
-description: "On-demand gate for whole-pipeline skills — each one runs an entire multi-step workflow end-to-end rather than supporting a task (examples from this author's own setup: paint/genjutsu, impeccable, image-to-code, gsd-autonomous, gsd-quick, gsd-fast, gsd-mvp-phase, gsd-ultraplan-phase, gsd-audit-fix — classify your own via check-skills). Open this gate yourself only when the user asks for a whole end-to-end workflow ("처음부터 끝까지", "전체 다 해줘") in one of those domains — a narrow task belongs in its domain gate instead. Unlike the domain gates this is single-select: the user picks exactly ONE pipeline to run, not several to combine."
+description: "Gate for whole-pipeline skills that run an entire workflow end-to-end (examples from this author's setup: paint/genjutsu, impeccable, image-to-code, gsd-autonomous, gsd-quick…; classify your own via check-skills). Open it yourself only for end-to-end requests ('처음부터 끝까지', '전체 다 해줘'); a narrow task belongs in its domain gate. Single-select: the user picks exactly ONE pipeline."
 allowed-tools: Read, Bash
 ---
 
