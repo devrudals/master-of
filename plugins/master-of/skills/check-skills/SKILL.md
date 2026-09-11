@@ -25,13 +25,16 @@ above this skill's own base directory (the "Base directory for this skill"
 line you got when invoked, minus `/skills/check-skills`), or the root the
 SessionStart hook named in its message. It is NOT a fixed path — a
 skills-dir checkout and a marketplace install live in different places.
+Every script is run through `<plugin root>/hooks/run.sh <script>`, which
+picks bun or node (≥22.6) — never call `bun`/`node` directly, the user may
+have only one of them.
 
 ## Step 0 — manual scan (on-demand invocations only)
 
 If you were invoked directly by the user rather than by the hook's injected
 context, run the scan yourself before reporting:
 ```
-bun <plugin root>/hooks-handlers/on-session-start.ts
+<plugin root>/hooks/run.sh hooks-handlers/on-session-start.ts
 ```
 Its stdout tells you what's new/gone, exactly like the automatic hook would.
 Proceed to Step 1 if it reports anything, otherwise skip straight to Step 2.
@@ -107,8 +110,8 @@ For each newly-found component:
    surface this pipeline as an alternative, see `pipelines` for how
    that's used) to the right array in `registry.json`. `<lang>` is whatever
    `~/.claude/masterof/config.json`'s `report_language` currently is
-   (`"ko"` today, hence `description_ko`) — see "Report language" below for
-   where that value comes from and what to do if it's ever missing. It's a
+   (`ko` or `en`, so `description_ko` or `description_en`) — see "Report
+   language" below for where that value comes from. It's a
    concise one-line translation/summary of `description` in that language —
    the cached report (Step 2) is always rendered in it, so every entry needs
    one; write it yourself when classifying, don't leave it out.
@@ -149,7 +152,7 @@ empties out, leave the empty array and gate in place rather than deleting it
 (new classification, removal, a category added, a preference mode changed),
 regenerate the cached renders before finishing:
 ```
-bun <plugin root>/scripts/render-report.ts
+<plugin root>/hooks/run.sh scripts/render-report.ts
 ```
 That one command rebuilds BOTH `report.txt` (this skill's Step 2) and
 `~/.claude/masterof/gates/*.txt` (the per-gate activation indexes every domain
@@ -160,20 +163,19 @@ of truth; both renders are derived, never hand-edited.
 
 ### Report language (`~/.claude/masterof/config.json`)
 
-Every `description_<lang>` field and the entire rendered `report.txt` are in
-Korean today — but that's not a hardcoded rule, it's a recorded decision.
-`~/.claude/masterof/config.json` holds `report_language` (`"ko"`),
-`report_language_name`, and `determined_from`: it says this was set from the
-user's actual language preference in this Claude Code setup at the moment
-the master-of database was first built, not an assumption baked into this
-skill. If that file is ever missing (e.g. this is a fresh setup that hasn't
-built its database yet), **that's the trigger to determine it now**: read
-the user's evident language preference from the current session/output style
-and write `config.json` before generating any `description_<lang>` fields —
-don't default to Korean or English without checking. If the user's language
-preference later changes, they'd update `config.json` themselves (or ask you
-to) and `description_<lang>`/`report.txt` would need regenerating to match;
-this skill doesn't watch for that on its own.
+`report_language` is `"ko"` or `"en"`; the renderer ships both string
+tables, and every `description_<lang>` field and `category_meta.label_<lang>`
+/`desc_<lang>` is read with that suffix (falling back to `description` /
+`label_ko`). The SessionStart hook bootstraps the file from the system
+locale (`LANG`) on first run — so the very first report is already in a
+sensible language with no step of yours in the way. It records
+`determined_from` so you can see that's where it came from. If the user's
+actual session language clearly differs (they write Korean on an `en_US`
+machine, or vice versa), set `report_language` accordingly, note the new
+`determined_from`, and re-run the renderer — and from then on write
+`description_<that lang>` when classifying. Other languages: the data model
+allows any suffix, but only `ko`/`en` render; a third language means adding
+a string table to `scripts/render-report.ts` and `scripts/health.ts`.
 
 ### Permanent exemptions (`registry.json`'s `always_on` array — data, not code)
 
@@ -287,7 +289,7 @@ deliberately aren't.
 
 If `report.txt` is missing or looks stale relative to `registry.json` (e.g.
 you just classified something in Step 1 and haven't regenerated it yet), run
-`bun <plugin root>/scripts/render-report.ts` first, then Read
+`<plugin root>/hooks/run.sh scripts/render-report.ts` first, then Read
 and show it.
 
 If the user asks about something that isn't in `registry.json` at all

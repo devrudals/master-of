@@ -35,6 +35,10 @@ full registry) only when a task actually needs something in it.
 /plugin install master-of@master-of
 ```
 
+Needs `bun` or Node 22.6+ on your PATH (the scripts are TypeScript run
+directly). If neither is found, the first session tells you so instead of
+silently doing nothing.
+
 Restart the session. The first `SessionStart` hook run bootstraps an empty
 registry (the six domain gates, no skills classified yet) and starts scanning
 your installed skills for classification.
@@ -86,11 +90,11 @@ changes, and the fixes the health check points at.
   gating mechanism itself assumes any particular skill is installed. Classify
   your own skills into these gates, or ask `check-skills` to create a new
   gate, freely.
-- Status reports are rendered in Korean by default (`~/.claude/masterof/config.json`'s
-  `report_language`); `check-skills` determines this from your session's
-  language on first run if the file is missing. Multi-language descriptions
-  per skill are supported by the data model but only the Korean renderer
-  ships today — a PR adding another locale's renderer is welcome.
+- Reports render in English or Korean. The first session picks from your
+  system locale (`LANG`) and records it in `~/.claude/masterof/config.json`;
+  `check-skills` switches it if your actual session language differs. Other
+  languages need a string table added to the two renderer scripts — PRs
+  welcome.
 - Disabling a plugin to gate its skill also disables anything else that
   plugin ships (MCP servers, agents). `check-skills`'s health check flags
   this when it makes a gated skill non-functional, but does not work around

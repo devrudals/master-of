@@ -29,6 +29,7 @@
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { fileURLToPath } from "url";
 
 const HOME = homedir();
 const CLAUDE_DIR = join(HOME, ".claude");
@@ -36,13 +37,61 @@ const CLAUDE_JSON = join(HOME, ".claude.json");
 const SETTINGS_FILE = join(CLAUDE_DIR, "settings.json");
 const REGISTRY_FILE = join(CLAUDE_DIR, "masterof", "registry.json");
 const INSTALLED_PLUGINS_FILE = join(CLAUDE_DIR, "plugins", "installed_plugins.json");
+const CONFIG_FILE = join(CLAUDE_DIR, "masterof", "config.json");
+
+// Messages in the report language (config.json `report_language`, ko|en).
+function lang(): "ko" | "en" {
+  try {
+    return JSON.parse(readFileSync(CONFIG_FILE, "utf8")).report_language === "en" ? "en" : "ko";
+  } catch {
+    return "ko";
+  }
+}
+const MSG = {
+  ko: {
+    scopeGlobal: "전역",
+    scopeProject: (p: string) => `프로젝트 ${p}`,
+    dupDetail: (a: string, b: string) => `"${a}"과 "${b}" 양쪽에 중복 정의됨 — 어느 쪽이 적용되는지 파일만 봐서는 알 수 없음`,
+    dupFix: "한쪽 정의를 지워서 하나만 남기세요",
+    deadDetail: (scope: string, cmd: string) => `${scope} 설정의 실행 파일을 찾을 수 없음 (${cmd}) — 매 세션 연결 실패`,
+    deadFix: "해당 도구를 재설치하거나, 안 쓴다면 설정에서 정의를 지우세요",
+    component: "구성요소",
+    offDetail: (plugin: string, what: string, critical: boolean) =>
+      `${plugin} 플러그인이 꺼져 있어 이 스킬이 쓰는 ${what}가 죽어 있음` +
+      (critical ? " — 이 스킬은 그것 없이는 아무 동작도 못 함" : " — 스킬 본문은 읽히지만 일부 기능 불가"),
+    notInstalledDetail: (plugin: string, what: string) => `${plugin} 플러그인이 설치되어 있지 않아 ${what}를 쓸 수 없음`,
+    enableFix: (plugin: string) => `claude plugin enable ${plugin} — 단, 반영은 다음 세션부터입니다`,
+    installFix: (plugin: string) => `claude plugin install ${plugin} — 반영은 다음 세션부터입니다`,
+    ok: "점검 결과: 문제 없음",
+    critical: "심각",
+    warning: "주의",
+  },
+  en: {
+    scopeGlobal: "global",
+    scopeProject: (p: string) => `project ${p}`,
+    dupDetail: (a: string, b: string) => `defined in both "${a}" and "${b}" — which one applies isn't knowable from either file alone`,
+    dupFix: "delete one of the two definitions",
+    deadDetail: (scope: string, cmd: string) => `the ${scope} config's command can't be found (${cmd}) — fails to connect every session`,
+    deadFix: "reinstall that tool, or remove the server from the config if you don't use it",
+    component: "component",
+    offDetail: (plugin: string, what: string, critical: boolean) =>
+      `plugin ${plugin} is disabled, so the ${what} this skill uses is dead` +
+      (critical ? " — the skill can't do anything without it" : " — the skill's body still works, some features won't"),
+    notInstalledDetail: (plugin: string, what: string) => `plugin ${plugin} isn't installed, so its ${what} isn't available`,
+    enableFix: (plugin: string) => `claude plugin enable ${plugin} — takes effect at the next session start`,
+    installFix: (plugin: string) => `claude plugin install ${plugin} — takes effect at the next session start`,
+    ok: "Health: nothing broken",
+    critical: "CRITICAL",
+    warning: "warning",
+  },
+};
 
 export type Issue = {
   kind: "dead_mcp" | "disabled_dependency";
   severity: "critical" | "warning";
   subject: string; // the skill or server the issue is about
-  detail: string; // what's wrong, in Korean
-  fix: string; // what would fix it, in Korean
+  detail: string; // what's wrong, in the report language
+  fix: string; // what would fix it, in the report language
 };
 
 function readJson(path: string): any {
@@ -71,12 +120,13 @@ function checkMcpServers(): Issue[] {
   const issues: Issue[] = [];
   const cfg = readJson(CLAUDE_JSON);
   if (!cfg) return issues;
+  const m = MSG[lang()];
 
   const sources: { scope: string; servers: Record<string, any> }[] = [];
-  if (cfg.mcpServers) sources.push({ scope: "전역", servers: cfg.mcpServers });
+  if (cfg.mcpServers) sources.push({ scope: m.scopeGlobal, servers: cfg.mcpServers });
   for (const [proj, v] of Object.entries<any>(cfg.projects || {})) {
     if (v?.mcpServers && Object.keys(v.mcpServers).length > 0) {
-      sources.push({ scope: `프로젝트 ${proj}`, servers: v.mcpServers });
+      sources.push({ scope: m.scopeProject(proj), servers: v.mcpServers });
     }
   }
 
@@ -91,8 +141,8 @@ function checkMcpServers(): Issue[] {
           kind: "dead_mcp",
           severity: "warning",
           subject: `MCP ${name}`,
-          detail: `"${seen.get(name)}"과 "${scope}" 양쪽에 중복 정의됨 — 어느 쪽이 적용되는지 파일만 봐서는 알 수 없음`,
-          fix: "한쪽 정의를 지워서 하나만 남기세요",
+          detail: m.dupDetail(seen.get(name)!, scope),
+          fix: m.dupFix,
         });
       } else {
         seen.set(name, scope);
@@ -102,8 +152,8 @@ function checkMcpServers(): Issue[] {
           kind: "dead_mcp",
           severity: "critical",
           subject: `MCP ${name}`,
-          detail: `${scope} 설정의 실행 파일을 찾을 수 없음 (${def.command}) — 매 세션 연결 실패`,
-          fix: "해당 도구를 재설치하거나, 안 쓴다면 설정에서 정의를 지우세요",
+          detail: m.deadDetail(scope, def.command),
+          fix: m.deadFix,
         });
       }
     }
@@ -118,6 +168,7 @@ function checkDisabledDependencies(): Issue[] {
   const installed = readJson(INSTALLED_PLUGINS_FILE);
   if (!reg || !settings) return issues;
   const enabled: Record<string, boolean> = settings.enabledPlugins || {};
+  const m = MSG[lang()];
 
   for (const key of Object.keys(reg)) {
     if (key === "category_meta") continue;
@@ -129,18 +180,13 @@ function checkDisabledDependencies(): Issue[] {
       const isInstalled = !!installed?.plugins?.[req.plugin];
       const isEnabled = enabled[req.plugin] === true;
       if (isEnabled) continue;
-      const what = (req.components || []).join(", ") || "구성요소";
+      const what = (req.components || []).join(", ") || m.component;
       issues.push({
         kind: "disabled_dependency",
         severity: req.critical ? "critical" : "warning",
         subject: `${key}/${e.name}`,
-        detail: isInstalled
-          ? `${req.plugin} 플러그인이 꺼져 있어 이 스킬이 쓰는 ${what}가 죽어 있음` +
-            (req.critical ? " — 이 스킬은 그것 없이는 아무 동작도 못 함" : " — 스킬 본문은 읽히지만 일부 기능 불가")
-          : `${req.plugin} 플러그인이 설치되어 있지 않아 ${what}를 쓸 수 없음`,
-        fix: isInstalled
-          ? `claude plugin enable ${req.plugin} — 단, 반영은 다음 세션부터입니다`
-          : `claude plugin install ${req.plugin} — 반영은 다음 세션부터입니다`,
+        detail: isInstalled ? m.offDetail(req.plugin, what, !!req.critical) : m.notInstalledDetail(req.plugin, what),
+        fix: isInstalled ? m.enableFix(req.plugin) : m.installFix(req.plugin),
       });
     }
   }
@@ -153,14 +199,17 @@ export function checkHealth(): Issue[] {
   return all.sort((a, b) => (a.severity === b.severity ? 0 : a.severity === "critical" ? -1 : 1));
 }
 
-// Run directly for a quick manual check.
-if (import.meta.main) {
+// Run directly for a quick manual check. Detected by path, not
+// import.meta.main -- that's bun / node 24+ only, and node 22-23 is a
+// supported runtime here.
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const issues = checkHealth();
+  const m = MSG[lang()];
   if (issues.length === 0) {
-    console.log("점검 결과: 문제 없음");
+    console.log(m.ok);
   } else {
     for (const i of issues) {
-      console.log(`[${i.severity === "critical" ? "심각" : "주의"}] ${i.subject}: ${i.detail}\n   → ${i.fix}`);
+      console.log(`[${i.severity === "critical" ? m.critical : m.warning}] ${i.subject}: ${i.detail}\n   → ${i.fix}`);
     }
   }
 }

@@ -38,9 +38,10 @@
 // deterministic diffing.
 
 import { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync } from "fs";
-import { join } from "path";
+import { join, dirname } from "path";
 import { homedir } from "os";
-import { checkHealth } from "../scripts/health";
+import { fileURLToPath } from "url";
+import { checkHealth } from "../scripts/health.ts";
 
 const HOME = homedir();
 const CLAUDE_DIR = join(HOME, ".claude");
@@ -48,7 +49,8 @@ const CLAUDE_DIR = join(HOME, ".claude");
 // plugin hooks; when run by hand (check-skills' Step 0) fall back to this
 // file's own location. Never a fixed ~/.claude/skills/... path -- a
 // marketplace install lives under ~/.claude/plugins/cache instead.
-const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || join(import.meta.dir, "..");
+const HERE = dirname(fileURLToPath(import.meta.url));
+const PLUGIN_ROOT = process.env.CLAUDE_PLUGIN_ROOT || join(HERE, "..");
 const SKILLS_DIR = join(CLAUDE_DIR, "skills");
 const COMMANDS_DIR = join(CLAUDE_DIR, "commands");
 const AGENTS_DIR = join(CLAUDE_DIR, "agents");
@@ -57,6 +59,7 @@ const MASTEROF_DIR = join(CLAUDE_DIR, "masterof");
 const STATE_FILE = join(MASTEROF_DIR, "state.json");
 const REGISTRY_FILE = join(MASTEROF_DIR, "registry.json");
 const PREFS_FILE = join(MASTEROF_DIR, "preferences.json");
+const CONFIG_FILE = join(MASTEROF_DIR, "config.json");
 
 // The six domain gates this plugin ships (design/dev/research/stock/planning/
 // pipelines -- each a real <plugin root>/skills/<cat>/SKILL.md
@@ -70,15 +73,46 @@ const PREFS_FILE = join(MASTEROF_DIR, "preferences.json");
 // Bootstrapping the skeleton (categories + empty arrays, no skill entries)
 // the first time it's missing turns that into a one-time no-op instead of a
 // permanent blind spot. Never overwrites an existing registry.json.
-const DEFAULT_CATEGORY_META: Record<string, { label_ko: string; desc_ko: string }> = {
-  design: { label_ko: "디자인 / UI / 모션", desc_ko: "UI 폴리시, 애니메이션, 컬러/타이포/레이아웃 리뷰, 디자인 시스템" },
-  dev: { label_ko: "개발 도구", desc_ko: "브라우저 자동화, MCP 서버 제작, 스킬 검색 등 개발 보조 도구" },
-  research: { label_ko: "리서치 / 웹 스크래핑", desc_ko: "웹 검색·추출·모니터링, 이미지 인식, 작업 관찰" },
-  stock: { label_ko: "주식 / 기업 분석", desc_ko: "종목/기업 리서치, 재무 분석 관련 스킬" },
-  planning: { label_ko: "프로젝트 관리", desc_ko: "기획→실행→검증 전체 프로젝트 관리 프레임워크" },
-  pipelines: { label_ko: "전체 파이프라인 (단일 선택)", desc_ko: "지원 스킬 조합이 아니라 하나를 골라 처음부터 끝까지 실행하는 완결형 워크플로우" },
+const DEFAULT_CATEGORY_META: Record<string, Record<string, string>> = {
+  design: {
+    label_ko: "디자인 / UI / 모션", desc_ko: "UI 폴리시, 애니메이션, 컬러/타이포/레이아웃 리뷰, 디자인 시스템",
+    label_en: "Design / UI / motion", desc_en: "UI polish, animation, color/type/layout review, design systems",
+  },
+  dev: {
+    label_ko: "개발 도구", desc_ko: "브라우저 자동화, MCP 서버 제작, 스킬 검색 등 개발 보조 도구",
+    label_en: "Dev tooling", desc_en: "Browser automation, MCP server building, skill discovery and other dev helpers",
+  },
+  research: {
+    label_ko: "리서치 / 웹 스크래핑", desc_ko: "웹 검색·추출·모니터링, 이미지 인식, 작업 관찰",
+    label_en: "Research / web scraping", desc_en: "Web search, extraction, monitoring, image understanding, task observation",
+  },
+  stock: {
+    label_ko: "주식 / 기업 분석", desc_ko: "종목/기업 리서치, 재무 분석 관련 스킬",
+    label_en: "Stock / company analysis", desc_en: "Company and ticker research, financial analysis",
+  },
+  planning: {
+    label_ko: "프로젝트 관리", desc_ko: "기획→실행→검증 전체 프로젝트 관리 프레임워크",
+    label_en: "Project management", desc_en: "Plan → execute → verify project-management frameworks",
+  },
+  pipelines: {
+    label_ko: "전체 파이프라인 (단일 선택)", desc_ko: "지원 스킬 조합이 아니라 하나를 골라 처음부터 끝까지 실행하는 완결형 워크플로우",
+    label_en: "Whole pipelines (single-select)", desc_en: "End-to-end workflows you pick ONE of, rather than supporting skills you combine",
+  },
+  always_on: {
+    label_ko: "상시 활성 (게이트 없음)", desc_ko: "훅 의존/무비용/은밀 자동발동 등의 이유로 게이트를 거치지 않고 항상 켜져있는 것들",
+    label_en: "Always on (not gated)", desc_en: "Kept always-on on purpose: hook dependencies, near-zero cost, skills that must fire unprompted",
+  },
 };
-const DOMAIN_CATEGORIES = Object.keys(DEFAULT_CATEGORY_META);
+const DOMAIN_CATEGORIES = Object.keys(DEFAULT_CATEGORY_META).filter((k) => k !== "always_on");
+
+// Report language: decided from the system locale at bootstrap so the very
+// first report is already in the right language, with no model step on the
+// critical path. check-skills revises it if the user's session language
+// turns out to differ (a Korean speaker on an en_US machine, say).
+function detectLanguage(): "ko" | "en" {
+  const env = [process.env.LC_ALL, process.env.LC_MESSAGES, process.env.LANG, process.env.LANGUAGE].find(Boolean) || "";
+  return /^ko/i.test(env) ? "ko" : "en";
+}
 
 function bootstrapIfMissing() {
   mkdirSync(MASTEROF_DIR, { recursive: true });
@@ -92,6 +126,21 @@ function bootstrapIfMissing() {
     const prefs: any = {};
     for (const cat of DOMAIN_CATEGORIES) prefs[cat] = { mode: "always_ask" };
     writeFileSync(PREFS_FILE, JSON.stringify(prefs, null, 2));
+  }
+  if (!existsSync(CONFIG_FILE)) {
+    const l = detectLanguage();
+    writeFileSync(
+      CONFIG_FILE,
+      JSON.stringify(
+        {
+          report_language: l,
+          report_language_name: l === "ko" ? "Korean" : "English",
+          determined_from: "system locale (LANG) at first SessionStart; check-skills may revise from the user's actual session language",
+        },
+        null,
+        2
+      )
+    );
   }
 }
 
@@ -345,8 +394,8 @@ function main() {
 
   const lines: string[] = [];
   if (health.length > 0) {
-    lines.push("master-of 점검: 지금 고장 난 것이 있습니다 (자동으로 고치지 않음 — 사용자에게 한 줄로 알리고 넘어가세요).");
-    for (const i of health) lines.push(`  - ${i.subject}: ${i.detail}. 해결: ${i.fix}`);
+    lines.push("master-of health: something is broken right now (nothing is auto-fixed -- tell the user in one line each, in their language, then move on).");
+    for (const i of health) lines.push(`  - ${i.subject}: ${i.detail}. Fix: ${i.fix}`);
     if (added.length === 0 && removed.length === 0) {
       lines.push(
         "\nThat's all -- registry.json itself is in sync. Mention the above to the user briefly " +
