@@ -1,6 +1,6 @@
 ---
 name: "check-skills-all"
-description: "Full inventory of the master-of skill-gate system — every gated skill by domain (all ~129), plus what is broken, preference modes, and token savings. Same scan/classify pass as check-skills, but shows the complete list instead of the brief summary. Invoke when the user asks for the whole list ('전체 보여줘', '다 보여줘', '전체 목록'); for a quick status or a single category, check-skills is cheaper."
+description: "Full inventory of the master-of skill-gate system — every gated skill by domain, plus what is broken, preference modes, and token savings. Same scan/classify pass as check-skills, but shows the complete list instead of the brief summary. Invoke when the user asks for the whole list ('전체 보여줘', '다 보여줘', '전체 목록'); for a quick status or a single category, check-skills is cheaper."
 allowed-tools: Read, Edit, Write, Bash
 ---
 
