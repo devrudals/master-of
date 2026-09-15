@@ -8,6 +8,20 @@ sent. `master-of` keeps rarely-used skills dormant behind a handful of domain
 gates, and opens a gate (reading only that gate's own small index, never the
 full registry) only when a task actually needs something in it.
 
+On the author's own setup — 141 skills, commands and agents across 9 plugins
+and personal skill libraries — that's the difference between ~7,200
+always-on tokens per session and ~900: an 88% cut, with zero loss of
+capability, because nothing is deleted, just made dormant until a task
+actually calls for it.
+
+```
+$ /master-of:check-skills
+  7,224 tok   before gating (all 141 components always-on)
+−   897 tok   after gating (9 gates exposed instead)
+───────────
+  6,327 tok   saved (88% reduction)
+```
+
 ## What it does
 
 - **Domain gates** (`design`, `dev`, `research`, `stock`, `planning`,
