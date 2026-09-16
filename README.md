@@ -135,6 +135,28 @@ changes, and the fixes the health check points at.
   this by default when it sees that shape; it asks only when the set is
   small enough to be a toss-up.
 
+## v2 universal core (`src/`, `bin/mo.ts`)
+
+The same gate system as a harness-neutral CLI + MCP server, so Antigravity,
+Cursor, Windsurf or any MCP-capable agent can read the same registry. It is
+**Bun-only** (`bun >= 1.1`) — the entrypoint is TypeScript run directly, with
+no build step, so `node bin/mo.ts` will not work. Key commands:
+
+```
+bun run bin/mo.ts sync                 # scan ~/.claude and ~/.gemini, render gates/<source>/<gate>.txt
+bun run bin/mo.ts unclassified         # components still carrying the scanner's category guess
+bun run bin/mo.ts classify <name> <gate> [--cluster x] [--domain gate]
+bun run bin/mo.ts gate design [--source gemini]
+bun run bin/mo.ts doctor               # dead MCP binaries, disabled plugins, missing files
+bun run bin/mo.ts mcp-snippet          # paste into Cursor / Windsurf / Claude Desktop config
+bun test                               # 87 tests; bun run typecheck for tsc
+```
+
+Gate files are rendered per source so each harness only sees skills it can run;
+the same skill installed in both harnesses is listed in both (`animate` and
+`animate@gemini` in the registry). A rescan refreshes descriptions and paths
+but never overwrites a category you confirmed with `classify`.
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).

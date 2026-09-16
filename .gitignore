@@ -1,1 +1,8 @@
 .DS_Store
+node_modules/
+
+# Test-generated fixtures; only the mock-* skill sources are real inputs.
+sandbox/masterof-home-*
+sandbox/mock-claude-synced/
+sandbox/mock-gemini-gates/
+sandbox/manual-check/

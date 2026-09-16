@@ -1,0 +1,34 @@
+{
+  "name": "master-of",
+  "version": "2.0.0",
+  "description": "Universal AI Skill & Context Gateway across Claude Code, Antigravity (AGY), Cursor, and any MCP-compatible agent (runs on Bun)",
+  "main": "src/core/index.ts",
+  "bin": {
+    "mo": "./bin/mo.ts",
+    "master-of": "./bin/mo.ts"
+  },
+  "type": "module",
+  "scripts": {
+    "test": "bun test tests/",
+    "mo": "bun run ./bin/mo.ts",
+    "mcp": "bun run ./bin/mo.ts mcp",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json"
+  },
+  "keywords": [
+    "claude-code",
+    "antigravity",
+    "cursor",
+    "mcp",
+    "skills",
+    "context-window",
+    "token-savings"
+  ],
+  "author": "devrudals",
+  "license": "MIT",
+  "engines": {
+    "bun": ">=1.1"
+  },
+  "devDependencies": {
+    "bun-types": "^1.4.2"
+  }
+}
