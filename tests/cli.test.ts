@@ -40,7 +40,10 @@ describe("CLI (bin/mo.ts) End-to-End Tests", () => {
       "--sandbox", sandbox,
     ], { encoding: "utf8" });
     expect(gateRes.status).toBe(0);
-    expect(gateRes.stdout).toContain("animate |");
+    // ~/.claude/skills/* is loaded by Claude itself, so it is always-on and not gated.
+    expect(gateRes.stdout).not.toContain("animate |");
+    const alwaysRes = spawnSync("bun", ["run", binMo, "gate", "always_on", "--data-dir", cliDataDir, "--sandbox", sandbox], { encoding: "utf8" });
+    expect(alwaysRes.stdout).toContain("animate |");
 
     // 4. Run mo search
     const searchRes = spawnSync("bun", [

@@ -87,21 +87,31 @@ export class GateReporter {
       gateDescriptionsTotal += estimateTokens(`${cat}: ${label} ${desc}`);
     }
 
+    const baseDirOf = (source: string) =>
+      source === "gemini" ? paths.geminiDir : source === DEFAULT_SOURCE ? paths.claudeDir : paths.masterOfHome;
+    const formatLine = (source: string) =>
+      isEn
+        ? `# Format: name | description | path — a path not starting with / is relative to ${baseDirOf(source)}/`
+        : `# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 ${baseDirOf(source)}/ 를 붙여 Read`;
+
     for (const source of sources) {
+      const allSections: string[] = [];
+      const alwaysOn: RegistryComponent[] = [];
+
       for (const cat of Object.keys(categoryMap)) {
         const meta = reg.categories[cat];
         const label = isEn ? meta?.label_en || cat : meta?.label_ko || cat;
         const desc = isEn ? meta?.description_en || "" : meta?.description_ko || "";
-        const items = categoryMap[cat].filter((c) => inSource(c, source));
+        const inView = categoryMap[cat].filter((c) => inSource(c, source));
+        // Always-on components are still loaded after gating, so a gate line
+        // would only send the model back to a file it already has.
+        const items = inView.filter((c) => !c.always_on);
+        alwaysOn.push(...inView.filter((c) => c.always_on));
 
         const lines: string[] = [];
         lines.push(`# ${cat} — ${label} (${items.length}${isEn ? " items" : "개"}, ${source})`);
         if (desc) lines.push(`# ${desc}`);
-        lines.push(
-          isEn
-            ? `# Format: name | description | path`
-            : `# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 해당 기본 경로를 붙여 Read`
-        );
+        lines.push(formatLine(source));
         lines.push("");
 
         items.sort((a, b) => a.name.localeCompare(b.name));
@@ -120,7 +130,37 @@ export class GateReporter {
         const outPath = gateFilePath(paths.gatesDir, source, cat);
         writeAtomicSync(outPath, normalizeNFC(lines.join("\n") + "\n"));
         gateFilesCreated.push(outPath);
+        allSections.push(lines.join("\n"));
       }
+
+      // Cross-domain fallback: every gate in one read, for requests whose domain is unclear.
+      const allLines = [
+        isEn
+          ? "# master-of combined index (use only when a request spans several domains)"
+          : "# master-of 전체 통합 인덱스 (여러 분야를 한 번에 매칭할 때만 사용)",
+        isEn
+          ? "# For a single domain, gates/<domain>.txt is far cheaper."
+          : "# 한 분야만 필요하면 gates/<분야>.txt 를 읽는 쪽이 훨씬 쌉니다.",
+        "",
+        ...allSections,
+      ];
+      const allPath = gateFilePath(paths.gatesDir, source, "_all");
+      writeAtomicSync(allPath, normalizeNFC(allLines.join("\n") + "\n"));
+      gateFilesCreated.push(allPath);
+
+      // What the harness still loads on its own; listed so the report can say so.
+      alwaysOn.sort((a, b) => a.name.localeCompare(b.name));
+      const alwaysLines = [
+        isEn
+          ? `# always_on — loaded by the harness itself, not gated (${alwaysOn.length} items, ${source})`
+          : `# always_on — 상시 활성 (게이트 없음) (${alwaysOn.length}개, ${source})`,
+        formatLine(source),
+        "",
+        ...alwaysOn.map(renderLine),
+      ];
+      const alwaysPath = gateFilePath(paths.gatesDir, source, "always_on");
+      writeAtomicSync(alwaysPath, normalizeNFC(alwaysLines.join("\n") + "\n"));
+      gateFilesCreated.push(alwaysPath);
     }
 
     // 2. Token savings calculation

@@ -58,7 +58,7 @@ describe("Scanner, Registry v2 and Gate Reporter", () => {
     const reporter = new GateReporter(config, registryManager);
     const result = reporter.renderAll();
 
-    expect(result.gateFiles.length).toBe(12);
+    expect(result.gateFiles.length).toBe(16);
     expect(result.tokenSavings.before).toBeGreaterThan(0);
     expect(result.tokenSavings.after).toBeGreaterThan(0);
 

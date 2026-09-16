@@ -4,7 +4,7 @@ import { isPathSafe } from "./boundary.ts";
 import { DEFAULT_SOURCE } from "./types.ts";
 
 /** Gate and source names address files on disk, so they are allowlisted rather than sanitized. */
-const PLAIN_NAME = /^[a-z0-9][a-z0-9_-]*$/;
+const PLAIN_NAME = /^[a-z0-9_][a-z0-9_-]*$/;
 
 /** Gate index files live at gates/<source>/<category>.txt: one view per harness,
  * so an agent only ever reads the skills it can actually run. */

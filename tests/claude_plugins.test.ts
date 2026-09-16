@@ -95,3 +95,41 @@ describe("Gate description clipping", () => {
     expect(clipped.endsWith("…")).toBe(true);
   });
 });
+
+describe("Dormancy and gate exclusion", () => {
+  beforeEach(() => {
+    if (existsSync(home)) rmSync(home, { recursive: true, force: true });
+  });
+
+  it("only skills-library and disabled-plugin components count as dormant", () => {
+    setupClaude();
+    const index = new ClaudePluginIndex(claudeDir);
+    const mk = (rel: string) => ({ name: "x", type: "skill" as const, category: "dev", description: "", path_anchor: "claude" as const, rel_path: rel });
+    expect(index.isDormant(mk("skills-library/dev/x/SKILL.md"))).toBe(true);
+    expect(index.isDormant(mk("plugins/cache/mkt/off/1.0.0/skills/x/SKILL.md"))).toBe(true);
+    expect(index.isDormant(mk("plugins/cache/mkt/tool/2.0.0/skills/x/SKILL.md"))).toBe(false);
+    expect(index.isDormant(mk("skills/x/SKILL.md"))).toBe(false);
+    expect(index.isDormant(mk("agents/x.md"))).toBe(false);
+  });
+
+  it("keeps always-on components out of gate files, lists them in always_on.txt and _all.txt exists", () => {
+    const config = new ConfigManager({ dataDir: join(home, "data"), sandboxRoot: SANDBOX, claudeDir });
+    const registry = new RegistryManager(config);
+    registry.addComponents([
+      { name: "gated", type: "skill", category: "dev", description: "d", path_anchor: "sandbox", rel_path: "a/SKILL.md" },
+      { name: "loaded", type: "agent", category: "dev", description: "d", path_anchor: "sandbox", rel_path: "b.md", always_on: true },
+    ]);
+    const { GateReporter } = require("../src/core/reporter.ts");
+    new GateReporter(config, registry).renderAll();
+    const { readFileSync } = require("fs");
+    const dev = readFileSync(join(home, "data", "gates", "claude", "dev.txt"), "utf8");
+    const always = readFileSync(join(home, "data", "gates", "claude", "always_on.txt"), "utf8");
+    const all = readFileSync(join(home, "data", "gates", "claude", "_all.txt"), "utf8");
+    expect(dev).toContain("gated |");
+    expect(dev).not.toContain("loaded |");
+    expect(dev).toContain(`앞에 ${claudeDir}/ 를 붙여`);
+    expect(always).toContain("[에이전트] loaded |");
+    expect(all).toContain("# dev —");
+    expect(all).toContain("gated |");
+  });
+});

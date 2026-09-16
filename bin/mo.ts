@@ -140,7 +140,10 @@ switch (command) {
       [
         ...(existsSync(paths.claudeDir) ? scanner.scanDirectory(paths.claudeDir, "claude") : [])
           // Leftover cache dirs from earlier plugin versions only shadow the live install.
-          .filter((c) => !pluginIndex.isStaleCachePath(fullPathOf(c))),
+          .filter((c) => !pluginIndex.isStaleCachePath(fullPathOf(c)))
+          // Still-loaded components are always-on: kept in the registry for the
+          // report, left out of gate files (a confirmed value is never overridden).
+          .map((c) => ({ ...c, always_on: !pluginIndex.isDormant(c) })),
         ...(existsSync(paths.geminiDir) ? scanner.scanDirectory(paths.geminiDir, "gemini") : []),
       ],
       fullPathOf

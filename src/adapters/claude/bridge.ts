@@ -32,7 +32,7 @@ export class ClaudeBridge {
       syncedFiles.push(target);
     };
 
-    for (const cat of Object.keys(this.registryManager.getRegistry().categories)) {
+    for (const cat of [...Object.keys(this.registryManager.getRegistry().categories), "_all", "always_on"]) {
       // Claude's masterof/gates is flat and only ever holds the claude-source view.
       copyAtomic(gateFilePath(paths.gatesDir, "claude", cat), join(destGates, `${cat}.txt`));
     }

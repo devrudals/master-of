@@ -50,6 +50,22 @@ export class ClaudePluginIndex implements PluginStateProvider {
     return this.states.get(pluginId);
   }
 
+  /**
+   * Whether Claude Code still loads this component at session start. Gating
+   * only saves tokens for what is NOT loaded: skills parked in skills-library
+   * and anything inside a disabled plugin. Everything else (~/.claude/skills,
+   * agents, commands, enabled plugins, synced skills) is always-on regardless
+   * of the index, so listing it in a gate would only make the model re-read it.
+   */
+  isDormant(component: RegistryComponent): boolean {
+    if (component.path_anchor !== "claude") return false;
+    if (/^skills-library[\\/]/.test(component.rel_path)) return true;
+    const pluginId = ClaudePluginIndex.pluginIdOf(component);
+    if (!pluginId) return false;
+    const state = this.states.get(pluginId);
+    return !!state && !state.enabled;
+  }
+
   /** True for a plugins/cache path that no installed plugin version points at:
    * a leftover from an earlier install that would only shadow the live one. */
   isStaleCachePath(absolutePath: string): boolean {
