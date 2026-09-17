@@ -46,12 +46,18 @@ export class GateReporter {
       categoryMap[cat] = [];
     }
 
+    // Token savings model one harness's session (the default source, "claude"),
+    // not the whole cross-harness registry — a component that only exists for
+    // Gemini never sits in a Claude Code system prompt either way.
+    const inDefaultSource = (c: RegistryComponent) => c.source === "custom" || (c.source ?? DEFAULT_SOURCE) === DEFAULT_SOURCE;
+
     let rawTokensBefore = 0;
     let alwaysOnTokens = 0;
     for (const comp of components) {
       const cat = comp.category || "dev";
       if (!categoryMap[cat]) categoryMap[cat] = [];
       categoryMap[cat].push(comp);
+      if (!inDefaultSource(comp)) continue;
       const tokens = estimateTokens(`${comp.name}: ${comp.description}`);
       rawTokensBefore += tokens;
       // An always-on component is still loaded after gating, so it saves nothing.
@@ -204,7 +210,8 @@ export class GateReporter {
   private renderBriefReport(
     catMap: Record<string, RegistryComponent[]>,
     savings: { before: number; after: number; saved: number; pct: number },
-    isEn: boolean
+    isEn: boolean,
+    includeSavings: boolean = true
   ): string {
     const reg = this.registryManager.getRegistry();
     const lines: string[] = [];
@@ -241,7 +248,20 @@ export class GateReporter {
     }
     lines.push("");
 
-    // Token savings
+    if (includeSavings) {
+      lines.push(...this.renderTokenSavingsLines(savings, isEn));
+    }
+
+    return normalizeNFC(lines.join("\n"));
+  }
+
+  /** Kept as its own block so callers can place it wherever they like in the
+   * final output — the full report puts it last, after the inventory. */
+  private renderTokenSavingsLines(
+    savings: { before: number; after: number; saved: number; pct: number },
+    isEn: boolean
+  ): string[] {
+    const lines: string[] = [];
     lines.push(isEn ? "## Estimated Token Savings" : "## 토큰 절약 추정치");
     lines.push("```");
     lines.push(`  ${savings.before.toLocaleString()} tok   ${isEn ? "before gating (all always-on)" : "게이트 적용 전 (전체 상시 노출)"}`);
@@ -251,8 +271,42 @@ export class GateReporter {
     lines.push("```");
     lines.push(`*(Generated: ${new Date().toISOString()})*`);
     lines.push("");
+    return lines;
+  }
 
-    return normalizeNFC(lines.join("\n"));
+  /** Lists what the harness already keeps loaded outside the gate system, so the
+   * inventory doesn't silently omit components just because they need no gate. */
+  private renderAlwaysOnSection(catMap: Record<string, RegistryComponent[]>, isEn: boolean): string[] {
+    const reg = this.registryManager.getRegistry();
+    const inDefaultAlwaysOn = (c: RegistryComponent) =>
+      (c.source === "custom" || (c.source ?? DEFAULT_SOURCE) === DEFAULT_SOURCE) && !RegistryManager.isGated(c);
+
+    const byCat: Record<string, RegistryComponent[]> = {};
+    let total = 0;
+    for (const [cat, items] of Object.entries(catMap)) {
+      const shown = items.filter(inDefaultAlwaysOn).sort((a, b) => a.name.localeCompare(b.name));
+      if (shown.length > 0) byCat[cat] = shown;
+      total += shown.length;
+    }
+
+    const lines: string[] = [];
+    lines.push(
+      isEn
+        ? `## Always-on — loaded by the harness itself, not gated (${total})`
+        : `## Always-on — 상시 활성 (게이트 없음, ${total}개)`
+    );
+    for (const [cat, items] of Object.entries(byCat)) {
+      const meta = reg.categories[cat];
+      const label = isEn ? meta?.label_en || cat : meta?.label_ko || cat;
+      lines.push(`\n### /${cat} — ${label} (${items.length})`);
+      for (const item of items) {
+        const typePrefix = item.type === "command" ? "[커맨드] " : item.type === "agent" ? "[에이전트] " : "";
+        const desc = clipDescription(isEn ? item.description_en || item.description : item.description_ko || item.description);
+        lines.push(`- ${typePrefix}**${item.name}**${item.cluster ? ` (${item.cluster})` : ""}: ${desc}`);
+      }
+    }
+    lines.push("");
+    return lines;
   }
 
   /** The inventory a harness user cares about is what its gates offer: the
@@ -262,7 +316,7 @@ export class GateReporter {
     savings: { before: number; after: number; saved: number; pct: number },
     isEn: boolean
   ): string {
-    const brief = this.renderBriefReport(catMap, savings, isEn);
+    const brief = this.renderBriefReport(catMap, savings, isEn, false);
     const reg = this.registryManager.getRegistry();
     const lines: string[] = [brief];
     const source = DEFAULT_SOURCE;
@@ -282,6 +336,10 @@ export class GateReporter {
         lines.push(`- ${typePrefix}**${item.name}**${item.cluster ? ` (${item.cluster})` : ""}: ${desc}`);
       }
     }
+    lines.push("");
+
+    lines.push(...this.renderAlwaysOnSection(catMap, isEn));
+    lines.push(...this.renderTokenSavingsLines(savings, isEn));
 
     return normalizeNFC(lines.join("\n"));
   }
