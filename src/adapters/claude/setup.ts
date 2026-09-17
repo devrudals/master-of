@@ -95,18 +95,20 @@ export class ClaudePluginInstaller {
     const hook = write(
       "hooks/session-start.sh",
       `#!/bin/sh
-# master-of SessionStart (v2 — written by claude-setup).
-# Delegates to the ~/.master-of/mo wrapper, which itself was written by
-# claude-setup and bakes in the exact bun + data-dir invocation. Re-run
-# claude-setup to update the wrapper if you move the repo.
-MO="\${MASTER_OF_BIN:-}"
-if [ -z "\$MO" ] && [ -x "\${HOME}/.master-of/mo" ]; then
-  MO="\${HOME}/.master-of/mo"
+# master-of SessionStart bootstrap (v2 - Self-contained Plug-and-Play)
+if [ -n "\${MASTER_OF_BIN:-}" ]; then
+  exec "\$MASTER_OF_BIN" session-start
 fi
-if [ -n "\$MO" ]; then
-  exec "\$MO" session-start
+if [ -n "\${CLAUDE_PLUGIN_ROOT:-}" ] && [ -f "\${CLAUDE_PLUGIN_ROOT}/bin/mo.mjs" ]; then
+  exec node "\${CLAUDE_PLUGIN_ROOT}/bin/mo.mjs" session-start
 fi
-printf '%s' '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"master-of: mo wrapper not found — re-run claude-setup from the repo to restore it."}}'
+if [ -x "\${HOME}/.master-of/mo" ]; then
+  exec "\${HOME}/.master-of/mo" session-start
+fi
+if command -v mo >/dev/null 2>&1; then
+  exec mo session-start
+fi
+printf '%s' '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"master-of: mo CLI를 실행할 수 없습니다 (Node.js 환경 확인 필요)."}}'
 `
     );
     chmodSync(hook, 0o755);

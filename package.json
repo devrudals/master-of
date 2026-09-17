@@ -10,6 +10,7 @@
   "type": "module",
   "scripts": {
     "test": "bun test tests/",
+    "build": "bun build bin/mo.ts --target=node --outfile=plugins/master-of/bin/mo.mjs",
     "mo": "bun run ./bin/mo.ts",
     "mcp": "bun run ./bin/mo.ts mcp",
     "typecheck": "bunx tsc --noEmit -p tsconfig.json"

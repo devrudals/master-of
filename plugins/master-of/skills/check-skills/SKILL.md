@@ -14,29 +14,6 @@ and every question below has a CLI command that reads it correctly.
 
 ---
 
-## Setup (first time only)
-
-If the SessionStart hook said "mo CLI를 찾을 수 없습니다", run setup now:
-
-```bash
-# Find where bun + bin/mo.ts live (user cloned the repo somewhere):
-which bun          # confirm bun is available
-ls ~/Documents/0.\ Claude-projects/projects/master-of/bin/mo.ts   # adjust if cloned elsewhere
-```
-
-Then run claude-setup from the repo:
-```bash
-bun run ~/Documents/0.\ Claude-projects/projects/master-of/bin/mo.ts claude-setup
-```
-
-This writes `~/.master-of/mo` (the wrapper), the gate index files, and
-the hooks inside `~/.claude/skills/master-of/`. After this, all future
-sessions work automatically — no manual setup again.
-
-Tell the user to **restart the session** after setup completes.
-
----
-
 ## 1. Status (「현황」, 「점검해줘」)
 
 ```bash

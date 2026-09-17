@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { homedir } from "os";
-import { readFileSync, existsSync, readdirSync } from "fs";
+import { readFileSync, existsSync, readdirSync, chmodSync } from "fs";
 import { resolve, join } from "path";
 import { ConfigManager } from "../src/core/config.ts";
 import { RegistryManager } from "../src/core/registry.ts";
@@ -270,6 +270,18 @@ switch (command) {
     registryManager.pruneMissing(["claude", "gemini"]);
     assertOwnsClaudeDir();
     new ClaudeBridge(config, registryManager, reporter).syncToClaude();
+
+    // Ensure ~/.master-of/mo wrapper exists so skills can call mo directly
+    const wrapperPath = resolve(paths.masterOfHome, "mo");
+    if (!existsSync(wrapperPath)) {
+      const scriptPath = resolve(process.argv[1]);
+      const execLine = scriptPath.endsWith(".ts")
+        ? `exec bun run "${scriptPath}" --data-dir "${paths.masterOfHome}" "$@"`
+        : `exec node "${scriptPath}" --data-dir "${paths.masterOfHome}" "$@"`;
+      const wrapperContent = `#!/bin/sh\n# ~/.master-of/mo — generated automatically\n${execLine}\n`;
+      writeAtomicSync(wrapperPath, wrapperContent);
+      chmodSync(wrapperPath, 0o755);
+    }
 
     const issues = healthChecker.checkAll();
     const pending = registryManager.unclassified().filter((c) => (c.source ?? "claude") === "claude");

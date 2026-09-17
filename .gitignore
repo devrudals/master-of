@@ -1,5 +1,6 @@
 .DS_Store
 node_modules/
+dist/
 
 # Test-generated fixtures; only the mock-* skill sources are real inputs.
 sandbox/masterof-home*
