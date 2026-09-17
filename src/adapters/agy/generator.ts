@@ -30,6 +30,7 @@ export class AgyGateGenerator {
       mkdirSync(skillDir, { recursive: true });
 
       const gateIndexPath = gateFilePath(paths.gatesDir, "gemini", cat);
+      const claudeGateIndexPath = gateFilePath(paths.gatesDir, "claude", cat);
       const content = `---
 name: ${skillName}
 description: "Gate for ${meta.label_en} / ${meta.label_ko}. Activates dormant ${cat} skills on demand when a task requires ${cat} capabilities."
@@ -41,10 +42,13 @@ description: "Gate for ${meta.label_en} / ${meta.label_ko}. Activates dormant ${
 This gate manages dormant skills for **${meta.label_ko}** to keep your system prompt context lean and avoid context budget exclusions.
 
 1. Read the pre-rendered gate index:
-   Use \`view_file\` to read: \`${gateIndexPath}\`
+   Use \`view_file\` to read the primary index: \`${gateIndexPath}\`
+   (Claude Code의 스킬 라이브러리[GSD, Emil Design, Interfaces 등]까지 교차 탐색이 필요한 경우: \`${claudeGateIndexPath}\`)
 2. Compare the user's task with the descriptions in that index.
 3. Identify the 1-3 skills that best match the task.
 4. Read the selected skill's \`SKILL.md\` using \`view_file\` and execute its instructions.
+   - For Gemini paths: prepend \`${paths.geminiDir}/\` if relative
+   - For Claude paths: prepend \`${paths.claudeDir}/\` if relative
 `;
 
       writeAtomicSync(join(skillDir, "SKILL.md"), normalizeNFC(content));
