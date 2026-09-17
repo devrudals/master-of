@@ -57,6 +57,17 @@ describe("ClaudePluginIndex", () => {
     expect(index.isStaleCachePath(join(claudeDir, "plugins", "cache", "a", "b", "1", "SKILL.md"))).toBe(false);
   });
 
+  it("health stays quiet for a skill in a disabled plugin unless it declared the dependency", () => {
+    setupClaude();
+    const config = new ConfigManager({ dataDir: join(home, "data"), sandboxRoot: SANDBOX, claudeDir });
+    const registry = new RegistryManager(config);
+    mkdirSync(join(claudeDir, "plugins", "cache", "mkt", "off", "1.0.0", "skills", "quiet"), { recursive: true });
+    writeFileSync(join(claudeDir, "plugins", "cache", "mkt", "off", "1.0.0", "skills", "quiet", "SKILL.md"), "# q");
+    registry.addComponent({ name: "quiet", type: "skill", category: "dev", description: "", path_anchor: "claude", rel_path: "plugins/cache/mkt/off/1.0.0/skills/quiet/SKILL.md" });
+    const issues = new HealthChecker(config, registry, new ClaudePluginIndex(claudeDir)).checkAll();
+    expect(issues.filter((i) => i.kind === "disabled_dependency")).toEqual([]);
+  });
+
   it("health flags a skill whose plugin is disabled, with the enable command", () => {
     setupClaude();
     const config = new ConfigManager({ dataDir: join(home, "data"), sandboxRoot: SANDBOX, claudeDir });
@@ -64,7 +75,7 @@ describe("ClaudePluginIndex", () => {
     mkdirSync(join(claudeDir, "plugins", "cache", "mkt", "off", "1.0.0", "skills", "off-skill"), { recursive: true });
     writeFileSync(join(claudeDir, "plugins", "cache", "mkt", "off", "1.0.0", "skills", "off-skill", "SKILL.md"), "# off");
     registry.addComponents([
-      { name: "off-skill", type: "skill", category: "dev", description: "", path_anchor: "claude", rel_path: "plugins/cache/mkt/off/1.0.0/skills/off-skill/SKILL.md" },
+      { name: "off-skill", type: "skill", category: "dev", description: "", path_anchor: "claude", rel_path: "plugins/cache/mkt/off/1.0.0/skills/off-skill/SKILL.md", dependencies: { plugin: "off@mkt" } },
       { name: "tool-skill", type: "skill", category: "dev", description: "", path_anchor: "claude", rel_path: "plugins/cache/mkt/tool/2.0.0/skills/tool-skill/SKILL.md" },
     ]);
 

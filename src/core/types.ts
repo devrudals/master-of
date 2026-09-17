@@ -25,7 +25,7 @@ export interface RegistryComponent {
   source?: ComponentSource;
   /** "auto" = category is the scanner's regex guess; "confirmed" = a person or
    * a migrated v1 registry settled it. Only "auto" entries show up as unclassified. */
-  classification?: "auto" | "confirmed";
+  classification?: "auto" | "confirmed" | "ignored";
 }
 
 export type ComponentSource = "claude" | "gemini" | "custom";

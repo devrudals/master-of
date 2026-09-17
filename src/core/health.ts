@@ -84,7 +84,10 @@ export class HealthChecker {
         });
       }
 
-      const pluginId = comp.dependencies?.plugin || this.plugins?.pluginIdOf(comp) || null;
+      // Only an explicit dependency counts: disabling a plugin is how a skill is
+      // gated in the first place, so "its plugin is off" is the normal state,
+      // not a fault — unless the skill declared it cannot run without it.
+      const pluginId = comp.dependencies?.plugin;
       if (pluginId) (byPlugin.get(pluginId) ?? byPlugin.set(pluginId, []).get(pluginId)!).push(comp);
 
       const mcpName = comp.dependencies?.mcp_server;

@@ -128,19 +128,21 @@ describe("Classification workflow", () => {
     expect(run("sync").status).toBe(0);
 
     const pending = JSON.parse(run("unclassified", "--json").stdout);
-    expect(pending.map((c: any) => c.name)).toContain("animate");
+    expect(pending.map((c: any) => c.name)).toContain("parked-tool");
+    // Loaded-by-Claude skills are never listed: their category changes nothing.
+    expect(pending.map((c: any) => c.name)).not.toContain("animate");
 
-    expect(run("classify", "animate", "nope").status).toBe(1);
-    const ok = run("classify", "animate", "pipelines", "--cluster", "motion");
+    expect(run("classify", "parked-tool", "nope").status).toBe(1);
+    const ok = run("classify", "parked-tool", "pipelines", "--cluster", "motion");
     expect(ok.status).toBe(0);
-    expect(ok.stdout).toContain("animate → /pipelines (motion)");
+    expect(ok.stdout).toContain("parked-tool → /pipelines (motion)");
 
     expect(run("sync").status).toBe(0);
-    const after = JSON.parse(run("search", "animate", "--json").stdout)[0];
+    const after = JSON.parse(run("search", "parked-tool", "--json").stdout)[0];
     expect(after.category).toBe("pipelines");
     expect(after.cluster).toBe("motion");
     expect(after.classification).toBe("confirmed");
-    expect(JSON.parse(run("unclassified", "--json").stdout).map((c: any) => c.name)).not.toContain("animate");
+    expect(JSON.parse(run("unclassified", "--json").stdout).map((c: any) => c.name)).not.toContain("parked-tool");
   });
 
   it("reads a gate for a specific source", () => {
@@ -148,5 +150,62 @@ describe("Classification workflow", () => {
     expect(res.status).toBe(0);
     expect(res.stdout).toContain(", gemini)");
     expect(run("gate", "design", "--source", "../claude").status).toBe(1);
+  });
+});
+
+describe("Claude plugin install and session-start hook", () => {
+  const root = PROJECT_ROOT;
+  const binMo = join(root, "bin", "mo.ts");
+  const sandbox = join(root, "sandbox");
+  const dataDir = join(sandbox, "masterof-home-cli-setup");
+  const pluginDir = join(sandbox, "masterof-home-cli-setup-plugin");
+  const run = (...cmd: string[]) =>
+    spawnSync("bun", ["run", binMo, ...cmd, "--data-dir", dataDir, "--sandbox", sandbox], { encoding: "utf8" });
+
+  it("writes gate protocol files, a hook, and a mo-driven check-skills", () => {
+    for (const d of [dataDir, pluginDir]) if (existsSync(d)) rmSync(d, { recursive: true, force: true });
+    const protocol = join(root, "plugins", "master-of");
+    const res = run("claude-setup", pluginDir, "--protocol-from", protocol);
+    expect(res.status).toBe(0);
+    const fs = require("fs");
+    expect(fs.readFileSync(join(pluginDir, "skills", "dev", "SKILL.md"), "utf8")).toBe(fs.readFileSync(join(protocol, "skills", "dev", "SKILL.md"), "utf8"));
+    const check = fs.readFileSync(join(pluginDir, "skills", "check-skills", "SKILL.md"), "utf8");
+    expect(check).toContain("mo unclassified --source claude --json");
+    expect(check).toContain(binMo);
+    expect(check.length).toBeLessThan(6000); // v1 was 19KB
+    expect(JSON.parse(fs.readFileSync(join(pluginDir, "hooks", "hooks.json"), "utf8")).hooks.SessionStart[0].hooks[0].command).toContain("session-start.sh");
+    expect(fs.statSync(join(pluginDir, "hooks", "session-start.sh")).mode & 0o111).not.toBe(0);
+  });
+
+  it("fails loudly when protocol files are missing", () => {
+    const res = run("claude-setup", join(sandbox, "masterof-home-cli-setup-empty"), "--protocol-from", join(sandbox, "nowhere"));
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain("Protocol files not found");
+  });
+
+  it("session-start speaks only when something changed", () => {
+    if (existsSync(dataDir)) rmSync(dataDir, { recursive: true, force: true });
+    const first = run("session-start");
+    expect(first.status).toBe(0);
+    const ctx = JSON.parse(first.stdout).hookSpecificOutput.additionalContext;
+    expect(ctx).toContain("category guess");
+    expect(ctx.length).toBeLessThan(1500);
+
+    const second = run("session-start");
+    expect(second.status).toBe(0);
+    expect(second.stdout.trim()).toBe("");
+
+    expect(run("ignore", "parked-tool").status).toBe(0);
+    // Count went 1 -> 0: a change, so the hook speaks once more (health only, no guesses left).
+    const third = run("session-start");
+    expect(third.stdout.trim()).toBe("");
+    expect(JSON.parse(run("unclassified", "--source", "claude", "--json").stdout)).toEqual([]);
+    expect(JSON.parse(run("unclassified", "--source", "gemini", "--json").stdout).length).toBeGreaterThan(0);
+  });
+
+  it("classify --desc sets the Korean one-liner shown in the gate", () => {
+    expect(run("classify", "better-ui", "design", "--desc", "UI 한 줄 요약").status).toBe(0);
+    const comp = JSON.parse(run("search", "better-ui", "--json").stdout)[0];
+    expect(comp.description_ko).toBe("UI 한 줄 요약");
   });
 });

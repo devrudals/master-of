@@ -9,6 +9,8 @@ import { HealthChecker } from "../src/core/health.ts";
 import { AgyGateGenerator } from "../src/adapters/agy/generator.ts";
 import { ClaudeBridge } from "../src/adapters/claude/bridge.ts";
 import { ClaudePluginIndex } from "../src/adapters/claude/plugins.ts";
+import { ClaudePluginInstaller, defaultClaudePluginDir } from "../src/adapters/claude/setup.ts";
+import { readJsonSafe, writeAtomicSync } from "../src/core/fs-atomic.ts";
 import { RuleGenerator } from "../src/adapters/rules/generator.ts";
 import { UniversalMcpServer } from "../src/adapters/mcp/server.ts";
 import { resolveGateFile } from "../src/core/gates.ts";
@@ -24,6 +26,8 @@ let isJson = false;
 let source: string | undefined;
 let cluster: string | undefined;
 let domain: string | undefined;
+let desc: string | undefined;
+let protocolFrom: string | undefined;
 
 const cleanArgs: string[] = [];
 for (let i = 0; i < args.length; i++) {
@@ -40,6 +44,10 @@ for (let i = 0; i < args.length; i++) {
     cluster = args[++i];
   } else if (a === "--domain" && i + 1 < args.length) {
     domain = args[++i];
+  } else if (a === "--desc" && i + 1 < args.length) {
+    desc = args[++i];
+  } else if (a === "--protocol-from" && i + 1 < args.length) {
+    protocolFrom = args[++i];
   } else {
     cleanArgs.push(a);
   }
@@ -172,7 +180,8 @@ switch (command) {
       process.exit(1);
     }
     try {
-      const comp = registryManager.classify(name, category, { cluster, domain });
+      const language = config.ensureConfigFile().report_language;
+      const comp = registryManager.classify(name, category, { cluster, domain, description: desc, language });
       if (!comp) {
         console.error(`Component '${name}' not found in the registry.`);
         process.exit(1);
@@ -186,8 +195,80 @@ switch (command) {
     break;
   }
 
+  case "ignore": {
+    const name = cleanArgs[1];
+    if (!name) {
+      console.error("Usage: mo ignore <component-name>");
+      process.exit(1);
+    }
+    if (!registryManager.ignore(name)) {
+      console.error(`Component '${name}' not found in the registry.`);
+      process.exit(1);
+    }
+    reporter.renderAll();
+    console.log(`✓ '${name}' ignored — out of every gate and the unclassified list.`);
+    break;
+  }
+
+  case "claude-setup": {
+    const targetDir = cleanArgs[1] || defaultClaudePluginDir(config.getPaths().claudeDir);
+    const protocolDir = protocolFrom || targetDir;
+    const installer = new ClaudePluginInstaller(config);
+    const { written, missingProtocol } = installer.install(targetDir, protocolDir);
+    console.log(`✓ Wrote ${written.length} plugin files to ${targetDir}`);
+    if (missingProtocol.length > 0) {
+      console.error(`! Protocol files not found in ${protocolDir}: ${missingProtocol.join(", ")} — gates will not activate until they exist.`);
+      process.exit(1);
+    }
+    break;
+  }
+
+  case "session-start": {
+    // Runs from the Claude SessionStart hook: refresh everything, then speak
+    // only if something changed since the last session. Silence costs nothing.
+    const paths = config.getPaths();
+    const scanner = new SkillScanner();
+    const fullPathOf = (c: RegistryComponent) => registryManager.resolveFullPath(c);
+    const { unique } = dedupeByName(
+      [
+        ...(existsSync(paths.claudeDir) ? scanner.scanDirectory(paths.claudeDir, "claude") : [])
+          .filter((c) => !pluginIndex.isStaleCachePath(fullPathOf(c)))
+          .map((c) => ({ ...c, always_on: !pluginIndex.isDormant(c) })),
+        ...(existsSync(paths.geminiDir) ? scanner.scanDirectory(paths.geminiDir, "gemini") : []),
+      ],
+      fullPathOf
+    );
+    registryManager.upsertScanned(unique);
+    registryManager.pruneMissing(["claude", "gemini"]);
+    new ClaudeBridge(config, registryManager, reporter).syncToClaude();
+
+    const issues = healthChecker.checkAll();
+    const pending = registryManager.unclassified().filter((c) => (c.source ?? "claude") === "claude");
+    const stateFile = resolve(paths.masterOfHome, "state.json");
+    const prev = readJsonSafe<{ issue_keys?: string[]; unclassified?: number }>(stateFile, {});
+    const issueKeys = issues.map((i) => `${i.kind}:${i.subject}`).sort();
+    const changed = pending.length !== (prev.unclassified ?? -1) || JSON.stringify(issueKeys) !== JSON.stringify(prev.issue_keys ?? []);
+    writeAtomicSync(stateFile, JSON.stringify({ issue_keys: issueKeys, unclassified: pending.length, at: new Date().toISOString() }, null, 2));
+    if (!changed) break;
+
+    const lines: string[] = [];
+    if (issues.length > 0) {
+      lines.push(`master-of: ${issues.length} health issue(s) — say so in one line; 'check-skills' has the fixes.`);
+      for (const i of issues.slice(0, 5)) lines.push(`- [${i.severity}] ${i.subject}: ${i.fix}`);
+      if (issues.length > 5) lines.push(`- … +${issues.length - 5} more`);
+    }
+    if (pending.length > 0) {
+      lines.push(
+        `master-of: ${pending.length} Claude component(s) still carry the scanner's category guess (they are gated under that guess meanwhile). Do NOT classify now; mention it in one line and offer 'check-skills' when the user has time.`
+      );
+    }
+    if (lines.length === 0) break;
+    console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join("\n") } }));
+    break;
+  }
+
   case "unclassified": {
-    const pending = registryManager.unclassified();
+    const pending = registryManager.unclassified().filter((c) => !source || (c.source ?? "claude") === source);
     if (isJson) {
       console.log(JSON.stringify(pending, null, 2));
     } else if (pending.length === 0) {
@@ -272,8 +353,11 @@ Commands:
   search <query>    Search across all indexed skills
   doctor            Run diagnostic health checks
   sync              Scan Claude/AGY skills, prune gone files, regenerate gates
-  classify <name> <category>  Confirm a component's gate (--cluster, --domain optional)
-  unclassified      List components still carrying the scanner's category guess
+  classify <name> <category>  Confirm a component's gate (--desc "<one-liner>", --cluster, --domain)
+  ignore <name>     Keep a component out of every gate and the unclassified list
+  claude-setup [dir]  Write the Claude Code plugin (gate skills + hook driven by mo)
+  session-start     Hook entry: rescan, re-render, report only what changed
+  unclassified      List components still carrying the scanner's category guess (--source filters)
   remove <name>     Remove one component from the registry
   agy-setup [dir]   Generate AGY gate skills (gate-design, gate-dev, etc.)
   claude-sync [dir] Sync gate & report files to Claude masterof directory

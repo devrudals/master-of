@@ -294,7 +294,11 @@ export class RegistryManager {
   }
 
   /** Settles a component's category (and optionally cluster/domain) by hand. */
-  classify(id: string, category: string, extra?: { cluster?: string; domain?: string }): RegistryComponent | null {
+  classify(
+    id: string,
+    category: string,
+    extra?: { cluster?: string; domain?: string; description?: string; language?: "ko" | "en" }
+  ): RegistryComponent | null {
     const comp = this.getComponent(id);
     if (!comp) return null;
     if (!this.registry.categories[category]) {
@@ -303,14 +307,32 @@ export class RegistryManager {
     comp.category = category;
     if (extra?.cluster !== undefined) comp.cluster = extra.cluster || undefined;
     if (extra?.domain !== undefined) comp.domain = extra.domain || undefined;
+    if (extra?.description) {
+      if (extra.language === "en") comp.description_en = normalizeNFC(extra.description);
+      else comp.description_ko = normalizeNFC(extra.description);
+    }
     comp.classification = "confirmed";
     this.registry.updated_at = new Date().toISOString();
     this.save();
     return comp;
   }
 
+  /** Drops a component from every gate and from the unclassified list without
+   * removing it — a rescan would only bring a removed one back. */
+  ignore(id: string): RegistryComponent | null {
+    const comp = this.getComponent(id);
+    if (!comp) return null;
+    comp.classification = "ignored";
+    comp.always_on = true;
+    this.registry.updated_at = new Date().toISOString();
+    this.save();
+    return comp;
+  }
+
+  /** Only gated components: an always-on one is never listed by category, so
+   * its guess changes nothing until it becomes dormant. */
   unclassified(): RegistryComponent[] {
-    return Object.values(this.registry.components).filter((c) => c.classification === "auto");
+    return Object.values(this.registry.components).filter((c) => c.classification === "auto" && !c.always_on);
   }
 
   removeComponent(id: string): boolean {

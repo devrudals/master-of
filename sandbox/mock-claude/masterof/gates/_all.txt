@@ -1,0 +1,27 @@
+# master-of 전체 통합 인덱스 (여러 분야를 한 번에 매칭할 때만 사용)
+# 한 분야만 필요하면 gates/<분야>.txt 를 읽는 쪽이 훨씬 쌉니다.
+
+# design — 디자인 / UI / 모션 (0개, claude)
+# UI 폴리시, 애니메이션, 컬러/타이포/레이아웃 리뷰, 디자인 시스템
+# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
+
+# dev — 개발 도구 (0개, claude)
+# 언어 가이드, 스택 패턴, 개발 유틸리티
+# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
+
+# research — 리서치 / 웹 스크래핑 (0개, claude)
+# 웹 검색, 스크래핑, 브라우저 자동화, 데이터 추출
+# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
+
+# stock — 한국 주식 분석 (0개, claude)
+# 주식 시세, 재무제표, 기업 정보 조회
+# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
+
+# planning — GSD 프로젝트 관리 (0개, claude)
+# 로드맵, 마일스톤, 이슈 관리
+# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
+
+# pipelines — 전체 파이프라인 (단일 선택) (0개, claude)
+# 프로젝트 전체 또는 대규모 워크플로우를 주도하는 엔드투엔드 파이프라인
+# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
+

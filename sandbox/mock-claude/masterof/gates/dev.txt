@@ -1,0 +1,4 @@
+# dev — 개발 도구 (0개, claude)
+# 언어 가이드, 스택 패턴, 개발 유틸리티
+# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
+

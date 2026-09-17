@@ -1,0 +1,45 @@
+# master-of 현황 (요약)
+
+## 점검 — 지금 고장 난 것
+점검 결과: 문제 없음
+
+## 게이트별 구성요소 수
+- **/design** 디자인 / UI / 모션: 3개
+- **/dev** 개발 도구: 2개
+- **/research** 리서치 / 웹 스크래핑: 1개
+- **/stock** 한국 주식 분석: 1개
+- **/planning** GSD 프로젝트 관리: 1개
+- **/pipelines** 전체 파이프라인 (단일 선택): 2개
+
+## 토큰 절약 추정치
+```
+  217 tok   게이트 적용 전 (전체 상시 노출)
+-   508 tok   게이트 적용 후 (도메인 게이트만)
+───────────
+  0 tok   절약 (0% 감소)
+```
+*(Generated: 2026-09-17T01:00:39.968Z)*
+
+## 전체 구성요소 목록
+
+### /design — 디자인 / UI / 모션 (3)
+- **flutter-preview**: Flutter 위젯 인터랙티브 프리뷰 시스템 및 반응형 UI 레이아웃
+- **better-ui**: UI 폴리시 디테일, 여백, 타이포그래피, 마이크로 인터랙션 정밀 감사
+- **animate**: 애니메이션을 처음부터 설계하고 모션 물리 효과를 웹에 적용
+
+### /dev — 개발 도구 (2)
+- **dart-unit-test**: Dart 및 Flutter 단위 테스트 작성 및 코드 커버리지 리포트 생성
+- **parked-tool**: A dormant utility parked in skills-library so master-of gates it.
+
+### /research — 리서치 / 웹 스크래핑 (1)
+- **web-scraper**: 웹 브라우징 및 동적 페이지 데이터 크롤링, 텍스트 정제
+
+### /stock — 한국 주식 분석 (1)
+- **krx-analyzer**: 한국 거래소(KRX) 상장 기업 재무제표 및 공시 데이터 분석
+
+### /planning — GSD 프로젝트 관리 (1)
+- **sprint-planner**: GSD 스프린트 백로그 구성, 태스크 분해 및 마일스톤 추적
+
+### /pipelines — 전체 파이프라인 (단일 선택) (2)
+- **end-to-end-builder**: 아이디어 기획부터 배포까지 전체 파이프라인 총괄 오케스트레이션
+- **git-workflow**: Git 브랜치 전략, 커밋 메시지 컨벤션, PR 템플릿 자동화
