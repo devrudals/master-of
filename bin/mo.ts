@@ -494,7 +494,7 @@ Commands:
   session-start     Hook entry: rescan, re-render, report only what changed
   unclassified      List components still carrying the scanner's category guess (--source filters)
   remove <name>     Remove one component from the registry
-  agy-setup [dir]   Generate AGY gate skills (gate-design, gate-dev, etc.)
+  agy-setup [dir]   Generate AGY gate skills (master-of-design, master-of-dev, etc.)
   claude-sync [dir] Sync gate & report files to Claude masterof directory
   unparked          List raw skills currently always-on in ~/.claude/skills
   park <name> [cat] Park a raw skill into skills-library (or mo park --all)

@@ -25,7 +25,7 @@ export class AgyGateGenerator {
 
     // 1. Generate gate skills
     for (const [cat, meta] of Object.entries(reg.categories)) {
-      const skillName = `gate-${cat}`;
+      const skillName = `master-of-${cat}`;
       const skillDir = join(targetSkillsDir, skillName);
       mkdirSync(skillDir, { recursive: true });
 
