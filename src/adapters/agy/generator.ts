@@ -128,6 +128,53 @@ master-of 전체 스킬 인벤토리 현황을 확인합니다.
     writeAtomicSync(join(masterOfCheckDir, "SKILL.md"), normalizeNFC(checkContent.replace("name: check-skill", "name: master-of-check")));
     createdDirs.push(masterOfCheckDir);
 
+    // 3. Install master-of plugin, lifecycle hooks, and global rules for Antigravity
+    this.setupAgyPlugin();
+
     return createdDirs;
+  }
+
+  setupAgyPlugin(): void {
+    const paths = this.config.getPaths();
+    const pluginDir = join(paths.geminiDir, "config", "plugins", "master-of");
+    mkdirSync(join(pluginDir, "rules"), { recursive: true });
+
+    // 1. Manifest
+    const manifest = {
+      name: "master-of",
+      version: "2.0.0",
+      description: "Universal AI Skill & Context Gateway - 토큰 최적화 및 도메인 게이트웨이",
+    };
+    writeAtomicSync(join(pluginDir, "plugin.json"), JSON.stringify(manifest, null, 2) + "\n");
+
+    // 2. Lifecycle Hooks: PreInvocation hook for session start
+    const hooks = {
+      "master-of-gatekeeper": {
+        PreInvocation: [
+          {
+            type: "command",
+            command: "~/.master-of/mo session-start --agy",
+            timeout: 15,
+          },
+        ],
+      },
+    };
+    writeAtomicSync(join(pluginDir, "hooks.json"), JSON.stringify(hooks, null, 2) + "\n");
+
+    // 3. Rule: AGENTS.md in plugin and ~/.gemini/config/rules/master-of.md
+    const ruleContent = `# master-of Session Start & Skill Gatekeeper Rule
+
+When starting a conversation turn or when asked about skills, token usage, or status:
+1. If unparked raw skills exist (causing heavy Always-on token consumption, e.g. 176 skills consuming 30,000+ tokens) or if unclassified components exist:
+   - Proactively inform the user about the wasted tokens.
+   - Propose to batch-park them into their recommended domain gates using \`mo park --all\` to save 85%+ tokens immediately.
+   - In Antigravity, use \`ask_question\` tool to ask the user.
+   - When approved by the user, execute \`~/.master-of/mo park --all\` and update the gate status.
+`;
+    writeAtomicSync(join(pluginDir, "rules", "AGENTS.md"), normalizeNFC(ruleContent));
+
+    const globalRulesDir = join(paths.geminiDir, "config", "rules");
+    mkdirSync(globalRulesDir, { recursive: true });
+    writeAtomicSync(join(globalRulesDir, "master-of.md"), normalizeNFC(ruleContent));
   }
 }

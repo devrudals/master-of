@@ -1,0 +1,11 @@
+{
+  "master-of-gatekeeper": {
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "~/.master-of/mo session-start --agy",
+        "timeout": 15
+      }
+    ]
+  }
+}

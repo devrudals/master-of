@@ -311,7 +311,7 @@ switch (command) {
     }
     if (unparked.length > 0 && unparkedChanged) {
       lines.push(
-        `master-of: ${unparked.length} raw skill(s) in ~/.claude/skills/ are always-on. Run 'mo park --all' (or 'mo park <name>') to park them in skills-library and make them dormant.`
+        `master-of: ${unparked.length} raw skill(s) in ~/.claude/skills/ are always-on (wasting ~${Math.round(unparked.length * 104)} tokens every session). Run 'mo park --all' (or 'mo park <name>') to park them in skills-library and make them dormant.`
       );
     }
     if (pending.length > 0) {
@@ -324,6 +324,26 @@ switch (command) {
       stateFile,
       JSON.stringify({ issue_keys: issueKeys, pending_names: pendingNames, unparked_names: unparkedNames, at: new Date().toISOString() }, null, 2)
     );
+
+    if (args.includes("--agy")) {
+      const hasUnparked = unparked.length > 0;
+      if (lines.length > 0 || hasUnparked) {
+        const msg = [
+          `[master-of Token Gatekeeper]`,
+          ...lines,
+          hasUnparked ? `현재 ${unparked.length}개의 낱개 스킬이 Always-on 상태로 30,000+ 토큰을 낭비하고 있습니다. 사용자에게 'check-skill'을 실행하거나 'mo park --all'로 도메인 게이트에 주차할지 적극적으로 제안하세요.` : ""
+        ].filter(Boolean).join("\n");
+        console.log(JSON.stringify({
+          injectSteps: [
+            { ephemeralMessage: msg }
+          ]
+        }));
+      } else {
+        console.log(JSON.stringify({ injectSteps: [] }));
+      }
+      break;
+    }
+
     if (!changed && !registryWasQuarantined) break;
     if (lines.length === 0) break;
     console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join("\n") } }));

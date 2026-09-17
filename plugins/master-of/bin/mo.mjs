@@ -1731,7 +1731,46 @@ master-of 전체 스킬 인벤토리 현황을 확인합니다.
     mkdirSync3(masterOfCheckDir, { recursive: true });
     writeAtomicSync(join8(masterOfCheckDir, "SKILL.md"), normalizeNFC(checkContent.replace("name: check-skill", "name: master-of-check")));
     createdDirs.push(masterOfCheckDir);
+    this.setupAgyPlugin();
     return createdDirs;
+  }
+  setupAgyPlugin() {
+    const paths = this.config.getPaths();
+    const pluginDir = join8(paths.geminiDir, "config", "plugins", "master-of");
+    mkdirSync3(join8(pluginDir, "rules"), { recursive: true });
+    const manifest = {
+      name: "master-of",
+      version: "2.0.0",
+      description: "Universal AI Skill & Context Gateway - 토큰 최적화 및 도메인 게이트웨이"
+    };
+    writeAtomicSync(join8(pluginDir, "plugin.json"), JSON.stringify(manifest, null, 2) + `
+`);
+    const hooks = {
+      "master-of-gatekeeper": {
+        PreInvocation: [
+          {
+            type: "command",
+            command: "~/.master-of/mo session-start --agy",
+            timeout: 15
+          }
+        ]
+      }
+    };
+    writeAtomicSync(join8(pluginDir, "hooks.json"), JSON.stringify(hooks, null, 2) + `
+`);
+    const ruleContent = `# master-of Session Start & Skill Gatekeeper Rule
+
+When starting a conversation turn or when asked about skills, token usage, or status:
+1. If unparked raw skills exist (causing heavy Always-on token consumption, e.g. 176 skills consuming 30,000+ tokens) or if unclassified components exist:
+   - Proactively inform the user about the wasted tokens.
+   - Propose to batch-park them into their recommended domain gates using \`mo park --all\` to save 85%+ tokens immediately.
+   - In Antigravity, use \`ask_question\` tool to ask the user.
+   - When approved by the user, execute \`~/.master-of/mo park --all\` and update the gate status.
+`;
+    writeAtomicSync(join8(pluginDir, "rules", "AGENTS.md"), normalizeNFC(ruleContent));
+    const globalRulesDir = join8(paths.geminiDir, "config", "rules");
+    mkdirSync3(globalRulesDir, { recursive: true });
+    writeAtomicSync(join8(globalRulesDir, "master-of.md"), normalizeNFC(ruleContent));
   }
 }
 
@@ -2707,12 +2746,31 @@ ${execLine}
         lines.push(`- \u2026 +${issues.length - 5} more`);
     }
     if (unparked.length > 0 && unparkedChanged) {
-      lines.push(`master-of: ${unparked.length} raw skill(s) in ~/.claude/skills/ are always-on. Run 'mo park --all' (or 'mo park <name>') to park them in skills-library and make them dormant.`);
+      lines.push(`master-of: ${unparked.length} raw skill(s) in ~/.claude/skills/ are always-on (wasting ~${Math.round(unparked.length * 104)} tokens every session). Run 'mo park --all' (or 'mo park <name>') to park them in skills-library and make them dormant.`);
     }
     if (pending.length > 0) {
       lines.push(`master-of: ${pending.length} Claude component(s) still carry the scanner's category guess (they are gated under that guess meanwhile). Do NOT classify now; mention it in one line and offer 'check-skills' when the user has time.`);
     }
     writeAtomicSync2(stateFile, JSON.stringify({ issue_keys: issueKeys, pending_names: pendingNames, unparked_names: unparkedNames, at: new Date().toISOString() }, null, 2));
+    if (args.includes("--agy")) {
+      const hasUnparked = unparked.length > 0;
+      if (lines.length > 0 || hasUnparked) {
+        const msg = [
+          `[master-of Token Gatekeeper]`,
+          ...lines,
+          hasUnparked ? `\uD604\uC7AC ${unparked.length}\uAC1C\uC758 \uB0B1\uAC1C \uC2A4\uD0AC\uC774 Always-on \uC0C1\uD0DC\uB85C 30,000+ \uD1A0\uD070\uC744 \uB0AD\uBE44\uD558\uACE0 \uC788\uC2B5\uB2C8\uB2E4. \uC0AC\uC6A9\uC790\uC5D0\uAC8C 'check-skill'\uC744 \uC2E4\uD589\uD558\uAC70\uB098 'mo park --all'\uB85C \uB3C4\uBA54\uC778 \uAC8C\uC774\uD2B8\uC5D0 \uC8FC\uCC28\uD560\uC9C0 \uC801\uADF9\uC801\uC73C\uB85C \uC81C\uC548\uD558\uC138\uC694.` : ""
+        ].filter(Boolean).join(`
+`);
+        console.log(JSON.stringify({
+          injectSteps: [
+            { ephemeralMessage: msg }
+          ]
+        }));
+      } else {
+        console.log(JSON.stringify({ injectSteps: [] }));
+      }
+      break;
+    }
     if (!changed && !registryWasQuarantined)
       break;
     if (lines.length === 0)
