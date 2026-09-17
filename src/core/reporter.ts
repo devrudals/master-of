@@ -185,7 +185,7 @@ export class GateReporter {
   }
 
   private renderBriefReport(
-    catMap: Record<string, any[]>,
+    catMap: Record<string, RegistryComponent[]>,
     savings: { before: number; after: number; saved: number; pct: number },
     isEn: boolean
   ): string {
@@ -232,22 +232,30 @@ export class GateReporter {
     return normalizeNFC(lines.join("\n"));
   }
 
+  /** The inventory a harness user cares about is what its gates offer: the
+   * default source's dormant components, exactly as the gate files list them. */
   private renderFullReport(
-    catMap: Record<string, any[]>,
+    catMap: Record<string, RegistryComponent[]>,
     savings: { before: number; after: number; saved: number; pct: number },
     isEn: boolean
   ): string {
     const brief = this.renderBriefReport(catMap, savings, isEn);
     const reg = this.registryManager.getRegistry();
     const lines: string[] = [brief];
+    const source = DEFAULT_SOURCE;
+    const gated = (c: RegistryComponent) => (c.source === "custom" || (c.source ?? DEFAULT_SOURCE) === source) && !c.always_on;
 
-    lines.push(isEn ? "## Full Item Breakdown" : "## 전체 구성요소 목록");
+    const total = Object.values(catMap).flat().filter(gated).length;
+    lines.push(isEn ? `## Full inventory — ${total} gated components (${source})` : `## 전체 구성요소 목록 — 게이트된 ${total}개 (${source})`);
     for (const [cat, items] of Object.entries(catMap)) {
       const meta = reg.categories[cat];
       const label = isEn ? meta?.label_en || cat : meta?.label_ko || cat;
-      lines.push(`\n### /${cat} — ${label} (${items.length})`);
-      for (const item of items) {
-        lines.push(`- **${item.name}**: ${item.description}`);
+      const shown = items.filter(gated).sort((a, b) => a.name.localeCompare(b.name));
+      lines.push(`\n### /${cat} — ${label} (${shown.length})`);
+      for (const item of shown) {
+        const typePrefix = item.type === "command" ? "[커맨드] " : item.type === "agent" ? "[에이전트] " : "";
+        const desc = clipDescription(isEn ? item.description_en || item.description : item.description_ko || item.description);
+        lines.push(`- ${typePrefix}**${item.name}**${item.cluster ? ` (${item.cluster})` : ""}: ${desc}`);
       }
     }
 

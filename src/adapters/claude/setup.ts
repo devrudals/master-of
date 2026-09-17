@@ -167,8 +167,10 @@ allowed-tools: Bash
 
 # check-skills-all
 
-Run \`${mo} full\` and show its output. It is the brief report followed by
-every component grouped by gate. For anything else, see \`check-skills\`.
+Run \`${mo} full\` and print its ENTIRE output verbatim in one code block. The
+user asked for the whole list: do not summarize, do not truncate, do not
+group it differently, even though it is long (one line per gated component,
+grouped by gate). For a summary they would have asked for \`check-skills\`.
 `
     );
 
