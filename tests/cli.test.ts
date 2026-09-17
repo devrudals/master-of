@@ -72,6 +72,8 @@ describe("CLI (bin/mo.ts) End-to-End Tests", () => {
     expect(agyRes.status).toBe(0);
     expect(existsSync(join(agyTargetDir, "master-of-design", "SKILL.md"))).toBe(true);
     expect(existsSync(join(agyTargetDir, "master-of-dev", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(agyTargetDir, "check-skill", "SKILL.md"))).toBe(true);
+    expect(existsSync(join(agyTargetDir, "check-skill-all", "SKILL.md"))).toBe(true);
     expect(existsSync(join(agyTargetDir, "master-of-check", "SKILL.md"))).toBe(true);
   });
 });
