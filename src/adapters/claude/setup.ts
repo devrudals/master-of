@@ -164,15 +164,19 @@ a, b, c; planning ← …") and get a yes before running the classify commands.
       `---
 name: "check-skills-all"
 description: "Full inventory of the master-of skill-gate system — every gated component by domain, plus what is broken and token savings. Invoke when the user asks for the whole list ('전체 보여줘', '다 보여줘', '전체 목록'); for a quick status use check-skills."
-allowed-tools: Bash
+allowed-tools: Read, Bash
 ---
 
 # check-skills-all
 
-Run \`${mo} full\` and print its ENTIRE output verbatim in one code block. The
-user asked for the whole list: do not summarize, do not truncate, do not
-group it differently, even though it is long (one line per gated component,
-grouped by gate). For a summary they would have asked for \`check-skills\`.
+1. Run \`${mo} sync && ${mo} claude-sync\` (silent — this just refreshes the
+   report file on disk; do not print its output).
+2. Read \`${dataDir}/report.txt\` with the Read tool and paste its ENTIRE
+   content, top to bottom, as plain Markdown (not in a code fence, not
+   re-typed from memory of the Bash output). The user asked for the whole
+   list: do not summarize, do not truncate, do not group it differently,
+   even though it is long (one line per gated component, grouped by gate).
+   For a summary they would have asked for \`check-skills\`.
 `
     );
 
