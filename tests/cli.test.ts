@@ -171,10 +171,17 @@ describe("Claude plugin install and session-start hook", () => {
     expect(fs.readFileSync(join(pluginDir, "skills", "dev", "SKILL.md"), "utf8")).toBe(fs.readFileSync(join(protocol, "skills", "dev", "SKILL.md"), "utf8"));
     const check = fs.readFileSync(join(pluginDir, "skills", "check-skills", "SKILL.md"), "utf8");
     expect(check).toContain("mo unclassified --source claude --json");
-    expect(check).toContain(binMo);
+    // v2: check-skills uses the ~/.master-of/mo wrapper, not a hardcoded bin/mo.ts path
+    expect(check).toContain("~/.master-of/mo");
+    expect(check).not.toContain(binMo); // no hardcoded absolute paths in the skill text
     expect(check.length).toBeLessThan(6000); // v1 was 19KB
     expect(JSON.parse(fs.readFileSync(join(pluginDir, "hooks", "hooks.json"), "utf8")).hooks.SessionStart[0].hooks[0].command).toContain("session-start.sh");
     expect(fs.statSync(join(pluginDir, "hooks", "session-start.sh")).mode & 0o111).not.toBe(0);
+    // claude-setup also writes the ~/.master-of/mo wrapper
+    const wrapper = join(dataDir, "mo");
+    expect(fs.existsSync(wrapper)).toBe(true);
+    expect(fs.statSync(wrapper).mode & 0o111).not.toBe(0); // executable
+    expect(fs.readFileSync(wrapper, "utf8")).toContain(binMo); // wrapper references the actual CLI
   });
 
   it("fails loudly when protocol files are missing", () => {

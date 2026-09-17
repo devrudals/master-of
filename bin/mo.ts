@@ -333,7 +333,7 @@ switch (command) {
   }
 
   case "agy-setup": {
-    const targetDir = cleanArgs[1] || resolve(config.getPaths().geminiDir, "skills");
+    const targetDir = cleanArgs[1] || resolve(config.getPaths().geminiDir, "config", "skills");
     const gen = new AgyGateGenerator(config, registryManager, reporter);
     const created = gen.generateAgyGates(targetDir);
     console.log(`✓ Generated ${created.length} AGY gate skills in: ${targetDir}`);

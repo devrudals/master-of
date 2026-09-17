@@ -121,46 +121,46 @@ allowed-tools: Read, Bash
 
 # check-skills
 
-The engine is the \`mo\` CLI. Everywhere below, \`mo\` stands for exactly:
-
-    ${mo}
+The engine is the \`mo\` CLI at \`~/.master-of/mo\` (written by \`claude-setup\`).
 
 Never edit registry.json by hand and never Read it — it is large; every
-question below has a command.
+question below has a CLI command.
 
-## 1. Status ("현황", "점검")
+## 1. Status (「현황」, 「점검해줘」)
 
-Run \`mo status\` and show its output as-is. It already lists what is
-broken (disabled plugins, dead MCP binaries, missing files) with the fix for each.
+\`\`\`bash
+~/.master-of/mo status
+\`\`\`
+
+Show the output as-is. It lists broken items with the fix for each.
 
 ## 2. Unclassified components
 
 The hook reports how many components still carry the scanner's category guess.
 To file them:
 
-1. \`mo unclassified --source claude --json\` — each entry has \`name\`, \`type\`, \`category\`
-   (the guess), \`description\`, \`rel_path\`, \`source\`.
-2. For each entry decide, from its description, the gate it belongs to:
+1. \`~/.master-of/mo unclassified --source claude --json\` — each entry has
+   \`name\`, \`type\`, \`category\` (the guess), \`description\`, \`rel_path\`, \`source\`.
+2. For each entry decide, from its description, which gate it belongs to:
    \`design\` / \`dev\` / \`research\` / \`stock\` / \`planning\` / \`pipelines\`.
-   Rules of thumb: an end-to-end workflow that runs a whole project phase is a
-   \`pipelines\` entry and needs \`--domain <gate>\` (the gate whose index should
-   offer it); GSD/planning skills take \`--cluster <name>\` grouping related ones.
-   Write a one-line Korean summary of what it does (\`--desc\`); the gate index
-   shows that instead of the original description.
-3. \`mo classify <name> <gate> --desc "<한 줄 요약>" [--cluster x] [--domain gate]\`
-   For a component that should never be gated or listed (a harness-internal
-   helper, a duplicate copy): \`mo ignore <name>\`.
-4. After the batch: \`mo claude-sync\` re-renders the gates Claude reads.
+   Rules of thumb: an end-to-end workflow that runs a whole project phase →
+   \`pipelines\` (needs \`--domain <gate>\`); GSD/planning skills take
+   \`--cluster <name>\`. Write a one-line Korean summary (\`--desc\`).
+3. \`~/.master-of/mo classify <name> <gate> --desc "한 줄 요약" [--cluster x] [--domain gate]\`
+   To permanently skip: \`~/.master-of/mo ignore <name>\`.
+4. After the batch: \`~/.master-of/mo claude-sync\` re-renders the gate indexes.
 
-Bulk first run (dozens of entries): show a one-line plan per gate ("design ←
-a, b, c; planning ← …") and get a yes before running the classify commands.
+Bulk first run (5+ entries): show a one-line plan per gate and get a yes
+BEFORE running \`claude plugin disable\` or moving folders.
 
 ## 3. Everything else
 
-- Full inventory: \`mo full\`
-- Search: \`mo search <keyword>\`
-- Remove a stale entry: \`mo remove <name>\`
-- Rescan by hand: \`mo sync && ${mo} claude-sync\`
+| Goal | Command |
+|---|---|
+| Full inventory | \`~/.master-of/mo full\` |
+| Search | \`~/.master-of/mo search <keyword>\` |
+| Remove stale entry | \`~/.master-of/mo remove <name>\` |
+| Re-scan now | \`~/.master-of/mo sync && ~/.master-of/mo claude-sync\` |
 `
     );
 
@@ -174,14 +174,21 @@ allowed-tools: Read, Bash
 
 # check-skills-all
 
-1. Run \`${mo} sync && ${mo} claude-sync\` (silent — this just refreshes the
-   report file on disk; do not print its output).
-2. Read \`${dataDir}/report.txt\` with the Read tool and paste its ENTIRE
-   content, top to bottom, as plain Markdown (not in a code fence, not
-   re-typed from memory of the Bash output). The user asked for the whole
-   list: do not summarize, do not truncate, do not group it differently,
-   even though it is long (one line per gated component, grouped by gate).
-   For a summary they would have asked for \`check-skills\`.
+The engine is the \`mo\` CLI at \`~/.master-of/mo\`.
+
+1. Refresh the index (silent — do not print output):
+   \`\`\`bash
+   ~/.master-of/mo sync && ~/.master-of/mo claude-sync
+   \`\`\`
+
+2. Show the full inventory:
+   \`\`\`bash
+   ~/.master-of/mo full
+   \`\`\`
+   Show its output as-is — every gated component grouped by gate, plus
+   always-on items and token savings.
+
+For a single gate only: \`~/.master-of/mo gate <name>\` (e.g. \`mo gate design\`).
 `
     );
 
