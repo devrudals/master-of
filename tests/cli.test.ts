@@ -215,6 +215,20 @@ describe("Claude plugin install and session-start hook", () => {
     const comp = JSON.parse(run("search", "better-ui", "--json").stdout)[0];
     expect(comp.description_ko).toBe("UI 한 줄 요약");
   });
+
+  it("lists unparked skills via CLI and parks one into skills-library", () => {
+    const unparked = JSON.parse(run("unparked", "--json").stdout);
+    expect(Array.isArray(unparked)).toBe(true);
+    expect(unparked.map((u: any) => u.name)).toContain("animate");
+
+    const parkRes = run("park", "animate", "design");
+    expect(parkRes.status).toBe(0);
+    expect(parkRes.stdout).toContain("Parked 'animate' into skills-library/design/animate");
+
+    // Unpark it back so sandbox state stays clean
+    const unparkRes = run("unpark", "animate");
+    expect(unparkRes.status).toBe(0);
+  });
 });
 
 describe("Live-install safety", () => {

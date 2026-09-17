@@ -11,6 +11,7 @@ import { AgyGateGenerator } from "../src/adapters/agy/generator.ts";
 import { ClaudeBridge } from "../src/adapters/claude/bridge.ts";
 import { ClaudePluginIndex } from "../src/adapters/claude/plugins.ts";
 import { ClaudePluginInstaller, defaultClaudePluginDir } from "../src/adapters/claude/setup.ts";
+import { ClaudeSkillParker } from "../src/adapters/claude/parking.ts";
 import { readJsonSafe, writeAtomicSync } from "../src/core/fs-atomic.ts";
 import { RuleGenerator } from "../src/adapters/rules/generator.ts";
 import { UniversalMcpServer } from "../src/adapters/mcp/server.ts";
@@ -266,14 +267,18 @@ switch (command) {
 
     const issues = healthChecker.checkAll();
     const pending = registryManager.unclassified().filter((c) => (c.source ?? "claude") === "claude");
+    const parker = new ClaudeSkillParker(config, registryManager);
+    const unparked = parker.listUnparked();
     const stateFile = resolve(paths.masterOfHome, "state.json");
-    const prev = readJsonSafe<{ issue_keys?: string[]; pending_names?: string[] }>(stateFile, {});
+    const prev = readJsonSafe<{ issue_keys?: string[]; pending_names?: string[]; unparked_names?: string[] }>(stateFile, {});
     const issueKeys = issues.map((i) => `${i.kind}:${i.subject}`).sort();
     // Keyed on the actual names, not a count: classifying one component while
     // another is discovered leaves the count equal but the work is not the same.
     const pendingNames = pending.map((c) => componentId(c)).sort();
+    const unparkedNames = unparked.map((u) => u.name).sort();
     const same = (a: string[], b: string[] | undefined) => JSON.stringify(a) === JSON.stringify(b ?? null);
-    const changed = !same(pendingNames, prev.pending_names) || !same(issueKeys, prev.issue_keys);
+    const unparkedChanged = !same(unparkedNames, prev.unparked_names);
+    const changed = !same(pendingNames, prev.pending_names) || !same(issueKeys, prev.issue_keys) || unparkedChanged;
 
     const lines: string[] = [];
     if (registryWasQuarantined) {
@@ -286,13 +291,21 @@ switch (command) {
       for (const i of issues.slice(0, 5)) lines.push(`- [${i.severity}] ${i.subject}: ${i.fix}`);
       if (issues.length > 5) lines.push(`- … +${issues.length - 5} more`);
     }
+    if (unparked.length > 0 && unparkedChanged) {
+      lines.push(
+        `master-of: ${unparked.length} raw skill(s) in ~/.claude/skills/ are always-on. Run 'mo park --all' (or 'mo park <name>') to park them in skills-library and make them dormant.`
+      );
+    }
     if (pending.length > 0) {
       lines.push(
         `master-of: ${pending.length} Claude component(s) still carry the scanner's category guess (they are gated under that guess meanwhile). Do NOT classify now; mention it in one line and offer 'check-skills' when the user has time.`
       );
     }
     // Record only after deciding, so a crash mid-run does not mark work as seen.
-    writeAtomicSync(stateFile, JSON.stringify({ issue_keys: issueKeys, pending_names: pendingNames, at: new Date().toISOString() }, null, 2));
+    writeAtomicSync(
+      stateFile,
+      JSON.stringify({ issue_keys: issueKeys, pending_names: pendingNames, unparked_names: unparkedNames, at: new Date().toISOString() }, null, 2)
+    );
     if (!changed && !registryWasQuarantined) break;
     if (lines.length === 0) break;
     console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join("\n") } }));
@@ -349,6 +362,95 @@ switch (command) {
     break;
   }
 
+  case "unparked": {
+    const parker = new ClaudeSkillParker(config, registryManager);
+    const list = parker.listUnparked();
+    if (isJson) {
+      console.log(JSON.stringify(list, null, 2));
+    } else if (list.length === 0) {
+      console.log("✓ No unparked raw skills in ~/.claude/skills/. All skills are dormant in skills-library.");
+    } else {
+      console.log(`\n${list.length} raw skill(s) currently always-on in ~/.claude/skills/:\n`);
+      for (const item of list) {
+        console.log(`- ${item.name} (suggested gate: /${item.category})`);
+      }
+      console.log(`\nRun 'mo park --all' to move all to skills-library and save tokens.\n`);
+    }
+    break;
+  }
+
+  case "park": {
+    const target = cleanArgs[1];
+    const targetCat = cleanArgs[2];
+    if (!target) {
+      console.error("Usage: mo park <skill-name> [category]  OR  mo park --all");
+      process.exit(1);
+    }
+    assertOwnsClaudeDir();
+    const parker = new ClaudeSkillParker(config, registryManager);
+    if (target === "--all") {
+      const results = parker.parkAll();
+      console.log(`✓ Parked ${results.length} skills into skills-library.`);
+    } else {
+      const res = parker.parkSkill(target, targetCat);
+      console.log(`✓ Parked '${res.name}' into skills-library/${res.category}/${res.name}`);
+    }
+    // Re-sync after parking so registry and gates reflect the new dormant state
+    const scanner = new SkillScanner();
+    const paths = config.getPaths();
+    const fullPathOf = (c: RegistryComponent) => registryManager.resolveFullPath(c);
+    const { unique: scanned } = dedupeByName(
+      [
+        ...(existsSync(paths.claudeDir) ? scanner.scanDirectory(paths.claudeDir, "claude") : [])
+          .filter((c) => !pluginIndex.isStaleCachePath(fullPathOf(c)))
+          .map((c) => ({ ...c, always_on: !pluginIndex.isDormant(c) })),
+        ...(existsSync(paths.geminiDir) ? scanner.scanDirectory(paths.geminiDir, "gemini") : []),
+      ],
+      fullPathOf
+    );
+    registryManager.upsertScanned(scanned);
+    registryManager.pruneMissing(["claude", "gemini"]);
+    if (existsSync(paths.claudeDir)) {
+      new ClaudeBridge(config, registryManager, reporter).syncToClaude();
+    }
+    const { tokenSavings } = reporter.renderAll();
+    console.log(`✓ Gates refreshed. Token reduction: ${tokenSavings.pct}% saved (${tokenSavings.before - tokenSavings.after} tok saved).`);
+    break;
+  }
+
+  case "unpark": {
+    const target = cleanArgs[1];
+    if (!target) {
+      console.error("Usage: mo unpark <skill-name>");
+      process.exit(1);
+    }
+    assertOwnsClaudeDir();
+    const parker = new ClaudeSkillParker(config, registryManager);
+    const res = parker.unparkSkill(target);
+    console.log(`✓ Unparked '${res.name}' back to ~/.claude/skills/${res.name}`);
+    // Re-sync
+    const scanner = new SkillScanner();
+    const paths = config.getPaths();
+    const fullPathOf = (c: RegistryComponent) => registryManager.resolveFullPath(c);
+    const { unique: scanned } = dedupeByName(
+      [
+        ...(existsSync(paths.claudeDir) ? scanner.scanDirectory(paths.claudeDir, "claude") : [])
+          .filter((c) => !pluginIndex.isStaleCachePath(fullPathOf(c)))
+          .map((c) => ({ ...c, always_on: !pluginIndex.isDormant(c) })),
+        ...(existsSync(paths.geminiDir) ? scanner.scanDirectory(paths.geminiDir, "gemini") : []),
+      ],
+      fullPathOf
+    );
+    registryManager.upsertScanned(scanned);
+    registryManager.pruneMissing(["claude", "gemini"]);
+    if (existsSync(paths.claudeDir)) {
+      new ClaudeBridge(config, registryManager, reporter).syncToClaude();
+    }
+    const { tokenSavings } = reporter.renderAll();
+    console.log(`✓ Gates refreshed. Token reduction: ${tokenSavings.pct}% saved.`);
+    break;
+  }
+
   case "init-agents": {
     const ruleGen = new RuleGenerator(config, registryManager);
     const agentsMd = ruleGen.generateAgentsMd();
@@ -394,6 +496,9 @@ Commands:
   remove <name>     Remove one component from the registry
   agy-setup [dir]   Generate AGY gate skills (gate-design, gate-dev, etc.)
   claude-sync [dir] Sync gate & report files to Claude masterof directory
+  unparked          List raw skills currently always-on in ~/.claude/skills
+  park <name> [cat] Park a raw skill into skills-library (or mo park --all)
+  unpark <name>     Move a parked skill back to ~/.claude/skills
   init-agents       Output AGENTS.md / Cursor rules template
   mcp-snippet       Output JSON config for Cursor, Windsurf, Claude Desktop
   mcp               Start Model Context Protocol (MCP) Stdio server
