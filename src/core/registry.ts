@@ -56,7 +56,7 @@ export function componentId(c: Pick<RegistryComponent, "name" | "source">): stri
 
 /** Fields the scanner cannot know; the registry's copy wins over a rescan. */
 const CLASSIFICATION_FIELDS = [
-  "category", "cluster", "domain", "dependencies", "always_on", "description_ko", "description_en", "classification",
+  "category", "cluster", "domain", "dependencies", "description_ko", "description_en", "classification",
 ] as const;
 
 function isRegistryShape(raw: any): raw is UniversalRegistry {
@@ -242,6 +242,49 @@ export class RegistryManager {
     return Object.values(this.registry.components).find((c) => normalizeNFC(c.name) === normId);
   }
 
+  /** Every id whose component carries this bare name, so a command can refuse
+   * to guess which harness's copy the user meant. Never short-circuits on an
+   * exact id: `dup` is also the claude copy's id, and that is exactly the case
+   * where silently picking it would overwrite the wrong component. */
+  idsForName(name: string): string[] {
+    const normName = normalizeNFC(name);
+    return Object.entries(this.registry.components)
+      .filter(([, c]) => normalizeNFC(c.name) === normName)
+      .map(([id]) => id)
+      .sort();
+  }
+
+  /** How a user names one specific copy: the stored id, or `<name>@<source>`
+   * (including `@claude`, which the stored id omits for v1 compatibility). */
+  private findBySourceSuffix(id: string): RegistryComponent | undefined {
+    const at = id.lastIndexOf("@");
+    if (at <= 0) return undefined;
+    const name = normalizeNFC(id.slice(0, at));
+    const source = id.slice(at + 1).toLowerCase();
+    return Object.values(this.registry.components).find(
+      (c) => normalizeNFC(c.name) === name && (c.source ?? DEFAULT_SOURCE) === source
+    );
+  }
+
+  /** Resolves an id the way a mutating command must: an id or `name@source`
+   * wins, a bare name that matches exactly one component wins, and a bare name
+   * matching several throws rather than guessing. */
+  private resolveOne(id: string): RegistryComponent {
+    const normId = normalizeNFC(id);
+    const suffixed = this.findBySourceSuffix(normId);
+    if (suffixed) return suffixed;
+
+    const ids = this.idsForName(normId);
+    if (ids.length === 1) return this.registry.components[ids[0]];
+    if (ids.length > 1) {
+      const choices = ids
+        .map((i) => (i.includes("@") ? i : `${i}@${this.registry.components[i].source ?? DEFAULT_SOURCE}`))
+        .join(", ");
+      throw new Error(`'${normId}' exists in more than one source — name one of: ${choices}`);
+    }
+    throw new Error(`Component '${normId}' not found in the registry.`);
+  }
+
   addComponent(component: RegistryComponent): void {
     this.addComponents([component]);
   }
@@ -299,14 +342,15 @@ export class RegistryManager {
     category: string,
     extra?: { cluster?: string; domain?: string; description?: string; language?: "ko" | "en" }
   ): RegistryComponent | null {
-    const comp = this.getComponent(id);
-    if (!comp) return null;
+    const comp = this.resolveOne(id);
     if (!this.registry.categories[category]) {
       throw new Error(`Unknown category '${category}'. Known: ${Object.keys(this.registry.categories).join(", ")}`);
     }
     comp.category = category;
     if (extra?.cluster !== undefined) comp.cluster = extra.cluster || undefined;
     if (extra?.domain !== undefined) comp.domain = extra.domain || undefined;
+    // Re-filing an ignored component is how an ignore is undone.
+    if (comp.classification === "ignored") comp.classification = "auto";
     if (extra?.description) {
       if (extra.language === "en") comp.description_en = normalizeNFC(extra.description);
       else comp.description_ko = normalizeNFC(extra.description);
@@ -318,26 +362,35 @@ export class RegistryManager {
   }
 
   /** Drops a component from every gate and from the unclassified list without
-   * removing it — a rescan would only bring a removed one back. */
+   * removing it — a rescan would only bring a removed one back. Reversed by
+   * classify(), so an ignore is never a dead end. */
   ignore(id: string): RegistryComponent | null {
-    const comp = this.getComponent(id);
-    if (!comp) return null;
+    const comp = this.resolveOne(id);
     comp.classification = "ignored";
-    comp.always_on = true;
     this.registry.updated_at = new Date().toISOString();
     this.save();
     return comp;
   }
 
+  /** True when a component should appear in a gate index at all. */
+  static isGated(c: RegistryComponent): boolean {
+    return !c.always_on && c.classification !== "ignored";
+  }
+
   /** Only gated components: an always-on one is never listed by category, so
    * its guess changes nothing until it becomes dormant. */
   unclassified(): RegistryComponent[] {
-    return Object.values(this.registry.components).filter((c) => c.classification === "auto" && !c.always_on);
+    return Object.values(this.registry.components).filter((c) => c.classification === "auto" && RegistryManager.isGated(c));
   }
 
   removeComponent(id: string): boolean {
-    const comp = this.getComponent(id);
-    const normId = comp ? componentId(comp) : normalizeNFC(id);
+    let normId = normalizeNFC(id);
+    try {
+      normId = componentId(this.resolveOne(id));
+    } catch (err: any) {
+      if (/more than one source/.test(err.message)) throw err;
+      return false;
+    }
     if (this.registry.components[normId]) {
       delete this.registry.components[normId];
       this.registry.updated_at = new Date().toISOString();

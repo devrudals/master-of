@@ -19,6 +19,8 @@ export class ClaudeBridge {
    */
   syncToClaude(targetClaudeMasterOfDir?: string): { syncedFiles: string[] } {
     const paths = this.config.getPaths();
+    // claudeDir follows --sandbox/--claude-dir, so a scratch data dir can never
+    // overwrite the real ~/.claude/masterof by accident.
     const dest = targetClaudeMasterOfDir || join(paths.claudeDir, "masterof");
     const destGates = join(dest, "gates");
     mkdirSync(destGates, { recursive: true });

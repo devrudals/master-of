@@ -1,4 +1,0 @@
-# design — 디자인 / UI / 모션 (0개, claude)
-# UI 폴리시, 애니메이션, 컬러/타이포/레이아웃 리뷰, 디자인 시스템
-# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
-

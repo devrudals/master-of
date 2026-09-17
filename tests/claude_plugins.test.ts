@@ -133,14 +133,22 @@ describe("Dormancy and gate exclusion", () => {
     const { GateReporter } = require("../src/core/reporter.ts");
     new GateReporter(config, registry).renderAll();
     const { readFileSync } = require("fs");
+
     const dev = readFileSync(join(home, "data", "gates", "claude", "dev.txt"), "utf8");
     const always = readFileSync(join(home, "data", "gates", "claude", "always_on.txt"), "utf8");
     const all = readFileSync(join(home, "data", "gates", "claude", "_all.txt"), "utf8");
     expect(dev).toContain("gated |");
     expect(dev).not.toContain("loaded |");
-    expect(dev).toContain(`앞에 ${claudeDir}/ 를 붙여`);
+    // The prefix names the listed lines' own anchor (sandbox here), not the source view.
+    expect(dev).toContain(`앞에 ${SANDBOX}/ 를 붙여`);
     expect(always).toContain("[에이전트] loaded |");
     expect(all).toContain("# dev —");
     expect(all).toContain("gated |");
+
+    // An ignored component is out of every gate, including the pipelines section.
+    registry.addComponent({ name: "dead-pipe", type: "skill", category: "pipelines", description: "d", domain: "dev", path_anchor: "sandbox", rel_path: "c/SKILL.md" });
+    registry.ignore("dead-pipe");
+    new GateReporter(config, registry).renderAll();
+    expect(readFileSync(join(home, "data", "gates", "claude", "dev.txt"), "utf8")).not.toContain("dead-pipe");
   });
 });

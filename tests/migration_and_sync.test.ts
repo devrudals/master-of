@@ -125,10 +125,63 @@ describe("Sync semantics", () => {
     const tool = registry.getComponent("tool")!;
     expect(tool.category).toBe("research");
     expect(tool.cluster).toBe("scrapers");
-    expect(tool.always_on).toBe(true);
+    // always_on is a fact about what the harness loads, so a rescan recomputes it
+    // rather than preserving a stale value.
+    expect(tool.always_on).toBeUndefined();
     expect(tool.description_ko).toBe("한글");
     expect(tool.description).toBe("fresh from disk");
     expect(tool.rel_path).toBe("moved/tool/SKILL.md");
+  });
+
+  it("a skill parked into skills-library becomes gated on the next scan", () => {
+    const registry = new RegistryManager(new ConfigManager({ dataDir, sandboxRoot: SANDBOX, claudeDir }));
+    registry.addComponent(comp("parked", { always_on: true, category: "dev" }));
+    expect(registry.unclassified().map((c) => c.name)).toEqual([]);
+
+    // Next scan finds it dormant (the adapter passes always_on: false).
+    registry.upsertScanned([comp("parked", { always_on: false, classification: "auto" })]);
+
+    expect(registry.getComponent("parked")!.always_on).toBe(false);
+    expect(registry.unclassified().map((c) => c.name)).toEqual(["parked"]);
+  });
+
+  it("ignore hides a component from gates and unclassified; classify brings it back", () => {
+    const registry = new RegistryManager(new ConfigManager({ dataDir, sandboxRoot: SANDBOX, claudeDir }));
+    registry.addComponent(comp("noise", { classification: "auto" }));
+    expect(registry.unclassified().map((c) => c.name)).toEqual(["noise"]);
+
+    registry.ignore("noise");
+    expect(registry.getComponent("noise")!.classification).toBe("ignored");
+    expect(registry.unclassified()).toEqual([]);
+    // A rescan must not resurrect it.
+    registry.upsertScanned([comp("noise", { classification: "auto" })]);
+    expect(registry.getComponent("noise")!.classification).toBe("ignored");
+
+    registry.classify("noise", "research");
+    expect(registry.getComponent("noise")!.classification).toBe("confirmed");
+    expect(RegistryManager.isGated(registry.getComponent("noise")!)).toBe(true);
+  });
+
+  it("refuses to mutate an ambiguous bare name", () => {
+    const registry = new RegistryManager(new ConfigManager({ dataDir, sandboxRoot: SANDBOX, claudeDir }));
+    registry.addComponents([comp("dup", { source: "claude" }), comp("dup", { source: "gemini", path_anchor: "gemini" })]);
+    expect(registry.idsForName("dup")).toEqual(["dup", "dup@gemini"]);
+
+    expect(() => registry.classify("dup", "design")).toThrow(/dup@claude, dup@gemini/);
+    expect(() => registry.ignore("dup")).toThrow(/more than one source/);
+    expect(() => registry.removeComponent("dup")).toThrow(/more than one source/);
+
+    // Naming one copy works and leaves the other alone, @claude included.
+    registry.classify("dup@gemini", "design");
+    expect(registry.getComponent("dup@gemini")!.category).toBe("design");
+    expect(registry.getComponent("dup")!.category).toBe("dev");
+    registry.classify("dup@claude", "research");
+    expect(registry.getComponent("dup")!.category).toBe("research");
+    expect(registry.removeComponent("dup@claude")).toBe(true);
+    expect(registry.removeComponent("nope")).toBe(false);
+    // With only one left, the bare name is unambiguous again.
+    registry.classify("dup", "stock");
+    expect(registry.getComponent("dup@gemini")!.category).toBe("stock");
   });
 
   it("pruneMissing drops only components under the given anchors whose file is gone", () => {

@@ -5,7 +5,7 @@ import { resolveGateFile } from "../../core/gates.ts";
 import { searchComponents } from "../../core/search.ts";
 import { DEFAULT_SOURCE } from "../../core/types.ts";
 import type { ConfigManager } from "../../core/config.ts";
-import type { RegistryManager } from "../../core/registry.ts";
+import { RegistryManager } from "../../core/registry.ts";
 import type { HealthChecker } from "../../core/health.ts";
 
 export class UniversalMcpServer {
@@ -150,7 +150,7 @@ export class UniversalMcpServer {
 
     if (name === "mo_list_gates") {
       const gates = Object.entries(reg.categories).map(([key, meta]) => {
-        const inGate = Object.values(reg.components).filter((c) => c.category === key);
+        const inGate = Object.values(reg.components).filter((c) => c.category === key && RegistryManager.isGated(c));
         const bySource: Record<string, number> = {};
         for (const c of inGate) bySource[c.source ?? DEFAULT_SOURCE] = (bySource[c.source ?? DEFAULT_SOURCE] || 0) + 1;
         const count = inGate.length;

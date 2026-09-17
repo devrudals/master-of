@@ -1,4 +1,0 @@
-# pipelines — 전체 파이프라인 (단일 선택) (0개, claude)
-# 프로젝트 전체 또는 대규모 워크플로우를 주도하는 엔드투엔드 파이프라인
-# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
-

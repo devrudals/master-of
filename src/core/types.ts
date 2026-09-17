@@ -21,11 +21,14 @@ export interface RegistryComponent {
   /** For a pipeline: the domain gate whose index lists it under 관련 파이프라인. */
   domain?: string;
   dependencies?: ComponentDependencies;
-  always_on?: boolean;
   source?: ComponentSource;
   /** "auto" = category is the scanner's regex guess; "confirmed" = a person or
-   * a migrated v1 registry settled it. Only "auto" entries show up as unclassified. */
+   * a migrated v1 registry settled it; "ignored" = deliberately out of every
+   * gate. Only "auto" entries show up as unclassified. */
   classification?: "auto" | "confirmed" | "ignored";
+  /** Set by a harness adapter from what the harness still loads by itself.
+   * Recomputed on every scan — unlike category, it is a fact, not a choice. */
+  always_on?: boolean;
 }
 
 export type ComponentSource = "claude" | "gemini" | "custom";

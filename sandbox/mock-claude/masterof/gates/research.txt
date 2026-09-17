@@ -1,4 +1,0 @@
-# research — 리서치 / 웹 스크래핑 (0개, claude)
-# 웹 검색, 스크래핑, 브라우저 자동화, 데이터 추출
-# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
-

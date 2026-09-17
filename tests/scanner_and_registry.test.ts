@@ -195,7 +195,9 @@ describe("Scanner descent and collisions", () => {
     expect(Object.keys(registry.getRegistry().components).sort()).toEqual(["apple-design", "apple-design@gemini"]);
     expect(registry.getComponent("apple-design")!.source).toBe("claude");
     expect(registry.getComponent("apple-design@gemini")!.source).toBe("gemini");
-    registry.removeComponent("apple-design");
+    // The bare name is ambiguous now, so removal must be told which copy.
+    expect(() => registry.removeComponent("apple-design")).toThrow(/more than one source/);
+    registry.removeComponent("apple-design@claude");
     expect(registry.getComponent("apple-design")!.source).toBe("gemini");
   });
 

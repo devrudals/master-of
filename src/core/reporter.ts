@@ -1,9 +1,10 @@
+import { join } from "path";
 import { writeAtomicSync } from "./fs-atomic.ts";
 import { gateFilePath } from "./gates.ts";
+import { RegistryManager } from "./registry.ts";
 import { DEFAULT_SOURCE } from "./types.ts";
 import { normalizeNFC, estimateTokens } from "./unicode.ts";
 import type { ConfigManager } from "./config.ts";
-import type { RegistryManager } from "./registry.ts";
 import type { HealthChecker } from "./health.ts";
 import type { RegistryComponent } from "./types.ts";
 
@@ -80,6 +81,7 @@ export class GateReporter {
     for (const comp of components) if (comp.source && comp.source !== "custom") sources.add(comp.source);
     const inSource = (comp: RegistryComponent, source: string) =>
       comp.source === "custom" || (comp.source ?? DEFAULT_SOURCE) === source;
+    const gated = RegistryManager.isGated;
 
     for (const [cat, meta] of Object.entries(reg.categories)) {
       const label = isEn ? meta?.label_en || cat : meta?.label_ko || cat;
@@ -87,12 +89,27 @@ export class GateReporter {
       gateDescriptionsTotal += estimateTokens(`${cat}: ${label} ${desc}`);
     }
 
-    const baseDirOf = (source: string) =>
-      source === "gemini" ? paths.geminiDir : source === DEFAULT_SOURCE ? paths.claudeDir : paths.masterOfHome;
-    const formatLine = (source: string) =>
-      isEn
-        ? `# Format: name | description | path — a path not starting with / is relative to ${baseDirOf(source)}/`
-        : `# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 ${baseDirOf(source)}/ 를 붙여 Read`;
+    // Paths resolve from path_anchor, not from the source view, so the header can
+    // only name a prefix when every listed line shares one anchor.
+    const anchorRoots: Record<string, string> = {
+      claude: paths.claudeDir,
+      gemini: paths.geminiDir,
+      library: join(paths.claudeDir, "skills-library"),
+      sandbox: paths.sandboxBoundaryRoot || paths.masterOfHome,
+      custom: paths.masterOfHome,
+    };
+    const formatLine = (items: RegistryComponent[]) => {
+      const anchors = new Set(items.filter((c) => !c.rel_path.startsWith("/")).map((c) => c.path_anchor));
+      const prefix = anchors.size === 1 ? anchorRoots[[...anchors][0]] : null;
+      if (!prefix) {
+        return isEn
+          ? `# Format: name | description | path (absolute, or relative to this entry's own root)`
+          : `# 형식: 이름 | 설명 | 경로 (절대경로이거나 해당 항목의 기본 경로 기준)`;
+      }
+      return isEn
+        ? `# Format: name | description | path — a path not starting with / is relative to ${prefix}/`
+        : `# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 ${prefix}/ 를 붙여 Read`;
+    };
 
     for (const source of sources) {
       const allSections: string[] = [];
@@ -105,13 +122,13 @@ export class GateReporter {
         const inView = categoryMap[cat].filter((c) => inSource(c, source));
         // Always-on components are still loaded after gating, so a gate line
         // would only send the model back to a file it already has.
-        const items = inView.filter((c) => !c.always_on);
-        alwaysOn.push(...inView.filter((c) => c.always_on));
+        const items = inView.filter(gated);
+        alwaysOn.push(...inView.filter((c) => !gated(c)));
 
         const lines: string[] = [];
         lines.push(`# ${cat} — ${label} (${items.length}${isEn ? " items" : "개"}, ${source})`);
         if (desc) lines.push(`# ${desc}`);
-        lines.push(formatLine(source));
+        lines.push(formatLine(items));
         lines.push("");
 
         items.sort((a, b) => a.name.localeCompare(b.name));
@@ -119,7 +136,7 @@ export class GateReporter {
 
         // The activation protocol judges task scale from this section, so a domain
         // gate must carry its own pipelines inline rather than require a second read.
-        const related = (pipelinesByDomain[cat] || []).filter((c) => inSource(c, source));
+        const related = (pipelinesByDomain[cat] || []).filter((c) => inSource(c, source) && gated(c));
         if (related.length > 0) {
           lines.push("");
           lines.push(isEn ? `## Related pipelines (pick at most one)` : `## 관련 파이프라인 (하나만 선택)`);
@@ -154,7 +171,7 @@ export class GateReporter {
         isEn
           ? `# always_on — loaded by the harness itself, not gated (${alwaysOn.length} items, ${source})`
           : `# always_on — 상시 활성 (게이트 없음) (${alwaysOn.length}개, ${source})`,
-        formatLine(source),
+        formatLine(alwaysOn),
         "",
         ...alwaysOn.map(renderLine),
       ];
@@ -209,12 +226,18 @@ export class GateReporter {
     }
     lines.push("");
 
-    // Gate counts
+    // Gate counts — what the gate files actually list, so the summary and the
+    // indexes can never disagree.
     lines.push(isEn ? "## Components per Domain Gate" : "## 게이트별 구성요소 수");
+    const inDefaultView = (c: RegistryComponent) =>
+      (c.source === "custom" || (c.source ?? DEFAULT_SOURCE) === DEFAULT_SOURCE) && RegistryManager.isGated(c);
     for (const [cat, items] of Object.entries(catMap)) {
       const meta = reg.categories[cat];
       const label = isEn ? meta?.label_en || cat : meta?.label_ko || cat;
-      lines.push(`- **/${cat}** ${label}: ${items.length}${isEn ? " items" : "개"}`);
+      const shown = items.filter(inDefaultView).length;
+      const hidden = items.length - shown;
+      const note = hidden > 0 ? (isEn ? ` (+${hidden} loaded/other sources)` : ` (+${hidden} 상시·타 소스)`) : "";
+      lines.push(`- **/${cat}** ${label}: ${shown}${isEn ? " items" : "개"}${note}`);
     }
     lines.push("");
 
@@ -243,7 +266,8 @@ export class GateReporter {
     const reg = this.registryManager.getRegistry();
     const lines: string[] = [brief];
     const source = DEFAULT_SOURCE;
-    const gated = (c: RegistryComponent) => (c.source === "custom" || (c.source ?? DEFAULT_SOURCE) === source) && !c.always_on;
+    const gated = (c: RegistryComponent) =>
+      (c.source === "custom" || (c.source ?? DEFAULT_SOURCE) === source) && RegistryManager.isGated(c);
 
     const total = Object.values(catMap).flat().filter(gated).length;
     lines.push(isEn ? `## Full inventory — ${total} gated components (${source})` : `## 전체 구성요소 목록 — 게이트된 ${total}개 (${source})`);

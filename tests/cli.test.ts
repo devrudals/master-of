@@ -209,3 +209,34 @@ describe("Claude plugin install and session-start hook", () => {
     expect(comp.description_ko).toBe("UI 한 줄 요약");
   });
 });
+
+describe("Live-install safety", () => {
+  const root = PROJECT_ROOT;
+  const binMo = join(root, "bin", "mo.ts");
+  const sandbox = join(root, "sandbox");
+
+  it("refuses to write the real ~/.claude/masterof from a non-default data dir", () => {
+    const scratch = join(sandbox, "masterof-home-guard");
+    if (existsSync(scratch)) rmSync(scratch, { recursive: true, force: true });
+    // No --sandbox, so claudeDir is the user's real ~/.claude.
+    const res = spawnSync("bun", ["run", binMo, "claude-sync", "--data-dir", scratch], { encoding: "utf8" });
+    expect(res.status).toBe(1);
+    expect(res.stderr).toContain("Refusing to write");
+
+    // An explicit destination is allowed.
+    const dest = join(scratch, "explicit-dest");
+    const ok = spawnSync("bun", ["run", binMo, "claude-sync", dest, "--data-dir", scratch], { encoding: "utf8" });
+    expect(ok.status).toBe(0);
+    expect(existsSync(join(dest, "gates", "design.txt"))).toBe(true);
+  });
+
+  it("claude-setup writes nothing when protocol files are missing", () => {
+    const target = join(sandbox, "masterof-home-halfinstall");
+    if (existsSync(target)) rmSync(target, { recursive: true, force: true });
+    const res = spawnSync("bun", ["run", binMo, "claude-setup", target, "--protocol-from", join(sandbox, "nowhere"), "--data-dir", join(sandbox, "masterof-home-halfinstall-data"), "--sandbox", sandbox], { encoding: "utf8" });
+    expect(res.status).toBe(1);
+    // No hook and no plugin.json may survive a refused install.
+    expect(existsSync(join(target, "hooks", "session-start.sh"))).toBe(false);
+    expect(existsSync(join(target, ".claude-plugin", "plugin.json"))).toBe(false);
+  });
+});

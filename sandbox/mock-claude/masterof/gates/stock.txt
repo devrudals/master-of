@@ -1,4 +1,0 @@
-# stock — 한국 주식 분석 (0개, claude)
-# 주식 시세, 재무제표, 기업 정보 조회
-# 형식: 이름 | 설명 | 경로 — 경로가 /로 시작하지 않으면 앞에 /Users/dlrudals/Documents/0. Claude-projects/projects/master-of/sandbox/mock-claude/ 를 붙여 Read
-

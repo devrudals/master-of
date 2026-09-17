@@ -37,14 +37,16 @@ export class ClaudePluginInstaller {
       return out;
     };
 
+    // Check first, write nothing on a miss: a half-written plugin dir means a
+    // live SessionStart hook and a plugin.json pointing at skills that do not exist.
+    const protocol = new Map<string, string>();
     for (const rel of PROTOCOL_FILES) {
       const src = join(protocolSourceDir, rel);
-      if (!existsSync(src)) {
-        missingProtocol.push(rel);
-        continue;
-      }
-      write(rel, readFileSync(src, "utf8"));
+      if (!existsSync(src)) missingProtocol.push(rel);
+      else protocol.set(rel, readFileSync(src, "utf8"));
     }
+    if (missingProtocol.length > 0) return { written, missingProtocol };
+    for (const [rel, content] of protocol) write(rel, content);
 
     const dataDir = this.config.getPaths().masterOfHome;
     const mo = `bun run "${MO_BIN}" --data-dir "${dataDir}"`;

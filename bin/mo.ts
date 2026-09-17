@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
-import { readFileSync, existsSync } from "fs";
-import { resolve } from "path";
+import { homedir } from "os";
+import { readFileSync, existsSync, readdirSync } from "fs";
+import { resolve, join } from "path";
 import { ConfigManager } from "../src/core/config.ts";
 import { RegistryManager } from "../src/core/registry.ts";
 import { SkillScanner, dedupeByName } from "../src/core/scanner.ts";
@@ -15,6 +16,7 @@ import { RuleGenerator } from "../src/adapters/rules/generator.ts";
 import { UniversalMcpServer } from "../src/adapters/mcp/server.ts";
 import { resolveGateFile } from "../src/core/gates.ts";
 import { searchComponents } from "../src/core/search.ts";
+import { componentId } from "../src/core/registry.ts";
 import type { RegistryComponent } from "../src/core/types.ts";
 
 const args = process.argv.slice(2);
@@ -54,10 +56,29 @@ for (let i = 0; i < args.length; i++) {
 }
 
 const config = new ConfigManager({ dataDir, sandboxRoot });
+// A quarantine wipes every confirmed classification, so the hook must be able to say so.
+const registryExistedBefore = existsSync(config.getPaths().registryFile);
 const registryManager = new RegistryManager(config);
+const registryWasQuarantined =
+  registryExistedBefore && readdirSync(config.getPaths().masterOfHome).some((f) => f.startsWith("registry.json.corrupt-"));
 const pluginIndex = new ClaudePluginIndex(config.getPaths().claudeDir);
 const healthChecker = new HealthChecker(config, registryManager, pluginIndex);
 const reporter = new GateReporter(config, registryManager, healthChecker);
+
+/** `mo --data-dir /tmp/scratch claude-sync` must not overwrite the live gates
+ * the real Claude install reads; only the default data dir owns them. */
+function assertOwnsClaudeDir(explicitTarget?: string): void {
+  if (explicitTarget) return;
+  const paths = config.getPaths();
+  const defaultHome = resolve(homedir(), ".master-of");
+  if (paths.masterOfHome === defaultHome) return;
+  if (!paths.claudeDir.startsWith(resolve(homedir(), ".claude"))) return;
+  console.error(
+    `Refusing to write ${join(paths.claudeDir, "masterof")} from data dir ${paths.masterOfHome}.\n` +
+      `Those gate files belong to the default data dir (${defaultHome}). Pass an explicit target directory to write elsewhere.`
+  );
+  process.exit(1);
+}
 
 const command = cleanArgs[0] || "status";
 
@@ -240,18 +261,26 @@ switch (command) {
     );
     registryManager.upsertScanned(unique);
     registryManager.pruneMissing(["claude", "gemini"]);
+    assertOwnsClaudeDir();
     new ClaudeBridge(config, registryManager, reporter).syncToClaude();
 
     const issues = healthChecker.checkAll();
     const pending = registryManager.unclassified().filter((c) => (c.source ?? "claude") === "claude");
     const stateFile = resolve(paths.masterOfHome, "state.json");
-    const prev = readJsonSafe<{ issue_keys?: string[]; unclassified?: number }>(stateFile, {});
+    const prev = readJsonSafe<{ issue_keys?: string[]; pending_names?: string[] }>(stateFile, {});
     const issueKeys = issues.map((i) => `${i.kind}:${i.subject}`).sort();
-    const changed = pending.length !== (prev.unclassified ?? -1) || JSON.stringify(issueKeys) !== JSON.stringify(prev.issue_keys ?? []);
-    writeAtomicSync(stateFile, JSON.stringify({ issue_keys: issueKeys, unclassified: pending.length, at: new Date().toISOString() }, null, 2));
-    if (!changed) break;
+    // Keyed on the actual names, not a count: classifying one component while
+    // another is discovered leaves the count equal but the work is not the same.
+    const pendingNames = pending.map((c) => componentId(c)).sort();
+    const same = (a: string[], b: string[] | undefined) => JSON.stringify(a) === JSON.stringify(b ?? null);
+    const changed = !same(pendingNames, prev.pending_names) || !same(issueKeys, prev.issue_keys);
 
     const lines: string[] = [];
+    if (registryWasQuarantined) {
+      lines.push(
+        `master-of: registry.json was unreadable and was moved aside, so every confirmed classification is gone and ${pendingNames.length} component(s) fell back to the scanner's guess. Tell the user this happened and that ${paths.masterOfHome} holds a registry.json.corrupt-* they may want to restore from.`
+      );
+    }
     if (issues.length > 0) {
       lines.push(`master-of: ${issues.length} health issue(s) — say so in one line; 'check-skills' has the fixes.`);
       for (const i of issues.slice(0, 5)) lines.push(`- [${i.severity}] ${i.subject}: ${i.fix}`);
@@ -262,6 +291,9 @@ switch (command) {
         `master-of: ${pending.length} Claude component(s) still carry the scanner's category guess (they are gated under that guess meanwhile). Do NOT classify now; mention it in one line and offer 'check-skills' when the user has time.`
       );
     }
+    // Record only after deciding, so a crash mid-run does not mark work as seen.
+    writeAtomicSync(stateFile, JSON.stringify({ issue_keys: issueKeys, pending_names: pendingNames, at: new Date().toISOString() }, null, 2));
+    if (!changed && !registryWasQuarantined) break;
     if (lines.length === 0) break;
     console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: "SessionStart", additionalContext: lines.join("\n") } }));
     break;
@@ -309,8 +341,9 @@ switch (command) {
   }
 
   case "claude-sync": {
-    const bridge = new ClaudeBridge(config, registryManager, reporter);
     const targetDir = cleanArgs[1];
+    assertOwnsClaudeDir(targetDir);
+    const bridge = new ClaudeBridge(config, registryManager, reporter);
     const { syncedFiles } = bridge.syncToClaude(targetDir);
     console.log(`✓ Synced ${syncedFiles.length} gate & report files to Claude masterof directory.`);
     break;
