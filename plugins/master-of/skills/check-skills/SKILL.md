@@ -23,6 +23,18 @@ and every question below has a CLI command that reads it correctly.
 Show the output as-is. It lists broken items (disabled plugins whose gates
 still offer them, dead MCP servers) with the fix for each.
 
+### PROACTIVE TOKEN GATEKEEPER DUTY (CRITICAL)
+Do NOT stop passively after showing the brief report!
+Run:
+```bash
+~/.master-of/mo unparked --json
+~/.master-of/mo unclassified --json
+```
+If unparked skills > 0 or Always-on token consumption is heavy (saving < 70%):
+1. **Warn the user explicitly** about the exact wasted token count (e.g. 30,000+ tok loaded every session).
+2. **PROACTIVELY ASK THE USER** to batch-park raw skills into `skills-library` (`mo park --all`) to instantly achieve 85%+ token savings.
+3. Upon user approval, run `~/.master-of/mo park --all` and show the updated savings!
+
 ## 2. Unclassified components
 
 The SessionStart hook reports how many components still carry the scanner's

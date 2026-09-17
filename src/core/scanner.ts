@@ -207,7 +207,7 @@ export class SkillScanner {
 
     for (const entry of entries) {
       const normEntry = normalizeNFC(entry);
-      if (SKIP_DIRS.has(normEntry) || normEntry.startsWith(".")) continue;
+      if (SKIP_DIRS.has(normEntry) || normEntry.startsWith(".") || normEntry.includes("backup")) continue;
 
       const fullPath = join(currentDir, normEntry);
       let stat;
