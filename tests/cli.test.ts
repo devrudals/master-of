@@ -54,6 +54,24 @@ describe("CLI (bin/mo.ts) End-to-End Tests", () => {
     expect(searchRes.status).toBe(0);
     expect(searchRes.stdout).toContain("animate");
 
+    // 4b. Run mo full (compact) and mo full --raw
+    const fullRes = spawnSync("bun", [
+      "run", binMo, "full",
+      "--data-dir", cliDataDir,
+      "--sandbox", sandbox,
+    ], { encoding: "utf8" });
+    expect(fullRes.status).toBe(0);
+    expect(fullRes.stdout).toContain("master-of 전체 인벤토리 현황");
+    expect(fullRes.stdout).toContain("도메인 게이트별 구성요소");
+
+    const fullRawRes = spawnSync("bun", [
+      "run", binMo, "full", "--raw",
+      "--data-dir", cliDataDir,
+      "--sandbox", sandbox,
+    ], { encoding: "utf8" });
+    expect(fullRawRes.status).toBe(0);
+    expect(fullRawRes.stdout).toContain("전체 구성요소 목록");
+
     // 5. Run mo doctor
     const doctorRes = spawnSync("bun", [
       "run", binMo, "doctor",

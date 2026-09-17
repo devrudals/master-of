@@ -14,15 +14,16 @@ The engine is the `mo` CLI at `~/.master-of/mo`.
    ```
    (Silent — this just refreshes gate files on disk. Do not print its output.)
 
-2. Show the full inventory, broken down by gate:
+2. Show the full inventory overview:
    ```bash
    ~/.master-of/mo full
    ```
-   Show its output as-is. It lists every gated component grouped by gate,
-   plus always-on items and the token savings estimate.
+   Show its output as-is. It provides a token-safe overview of all gates,
+   representative skills, always-on component counts, and token savings.
 
 If the user asks about one specific gate only, use:
 ```bash
 ~/.master-of/mo gate <name>   # e.g. mo gate design
 ```
 That's cheaper than `mo full` and exactly what they need.
+(The full uncompressed 80KB report is saved at `~/.master-of/report.txt` or via `mo full --raw`.)

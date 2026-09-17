@@ -181,14 +181,15 @@ The engine is the \`mo\` CLI at \`~/.master-of/mo\`.
    ~/.master-of/mo sync && ~/.master-of/mo claude-sync
    \`\`\`
 
-2. Show the full inventory:
+2. Show the full inventory overview:
    \`\`\`bash
    ~/.master-of/mo full
    \`\`\`
-   Show its output as-is — every gated component grouped by gate, plus
-   always-on items and token savings.
+   Show its output as-is — a token-safe overview of gated components grouped by gate,
+   plus always-on items and token savings.
 
 For a single gate only: \`~/.master-of/mo gate <name>\` (e.g. \`mo gate design\`).
+(Full uncompressed 80KB report is at \`~/.master-of/report.txt\` or via \`mo full --raw\`.)
 `
     );
 

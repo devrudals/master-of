@@ -78,14 +78,20 @@ name: check-skill-all
 description: "master-of 자가 점검 (전체 버전): 게이트별로 분류된 모든 스킬 인벤토리, 상시 활성(Always-on) 목록, 토큰 절약 상세 등 전체 리포트를 보여줍니다. '전체 목록', '전체 보여줘', '다 보여줘' 요청 시 사용."
 ---
 
-# check-skill-all — master-of 자가 점검 (전체)
+# check-skill-all — master-of 자가 점검 (전체 인벤토리 현황)
 
-master-of 전체 스킬 인벤토리 리포트를 확인합니다.
+master-of 전체 스킬 인벤토리 현황을 확인합니다.
 
-\`view_file\` 도구를 사용하여 전체 리포트 파일을 읽고 사용자에게 보여주세요:
+1. 전체 인벤토리 요약 출력:
+\`run_command\` 도구를 사용하여 다음 명령을 실행하고 그 출력을 보여주세요:
+\`\`\`bash
+~/.master-of/mo full
+\`\`\`
+
+2. 전체 원문 파일 안내:
+모든 세부 스킬과 설명이 포함된 전체 원문 리포트(80KB)는 다음 파일에 저장되어 있습니다:
 \`${paths.reportFile}\`
-
-(특정 도메인 하나만 확인하려면 해당 \`master-of-<domain>\` 게이트의 인덱스를 읽는 것이 훨씬 빠르고 저렴합니다.)
+(수백 개의 스킬 목록을 채팅창에 한꺼번에 덤프하면 토큰 한도로 인해 응답이 끊기거나 멈출 수 있습니다. 기본적으로는 위 \`mo full\`의 컴팩트 인벤토리를 보여주고, 특정 도메인이 필요할 때는 해당 \`master-of-<domain>\` 게이트나 \`mo gate <domain>\`을 사용하도록 안내하세요.)
 `;
     writeAtomicSync(join(checkAllSkillDir, "SKILL.md"), normalizeNFC(checkAllContent));
     createdDirs.push(checkAllSkillDir);

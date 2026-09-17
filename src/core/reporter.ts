@@ -207,6 +207,77 @@ export class GateReporter {
     };
   }
 
+  /** A safe, compact overview of the full inventory suitable for LLM chat contexts
+   * without blowing up token budgets (500 tokens instead of 30,000 tokens). */
+  renderCompactInventory(isEn: boolean): string {
+    const paths = this.config.getPaths();
+    const reg = this.registryManager.getRegistry();
+    const source = DEFAULT_SOURCE;
+    const gated = (c: RegistryComponent) =>
+      (c.source === "custom" || (c.source ?? DEFAULT_SOURCE) === source) && RegistryManager.isGated(c);
+
+    const components = Object.values(reg.components);
+    const categoryMap: Record<string, typeof components> = {};
+    for (const cat of Object.keys(reg.categories)) {
+      categoryMap[cat] = [];
+    }
+    for (const comp of components) {
+      const cat = comp.category || "dev";
+      if (!categoryMap[cat]) categoryMap[cat] = [];
+      categoryMap[cat].push(comp);
+    }
+
+    const { tokenSavings } = this.renderAll();
+    const lines: string[] = [];
+
+    lines.push(isEn ? "# master-of Full Inventory Overview" : "# master-of 전체 인벤토리 현황");
+    lines.push("");
+    lines.push(
+      isEn
+        ? `Full raw report (${components.length} components) saved at: \`${paths.reportFile}\``
+        : `전체 ${components.length}개 세부 리포트 파일: \`${paths.reportFile}\``
+    );
+    lines.push("");
+
+    lines.push(isEn ? "## 1. Domain Gates Overview" : "## 1. 도메인 게이트별 구성요소");
+    for (const [cat, items] of Object.entries(categoryMap)) {
+      const meta = reg.categories[cat];
+      const label = isEn ? meta?.label_en || cat : meta?.label_ko || cat;
+      const shown = items.filter(gated).sort((a, b) => a.name.localeCompare(b.name));
+      const sample = shown.slice(0, 4).map((c) => c.name).join(", ");
+      const sampleText = sample ? (shown.length > 4 ? ` (${sample}, …)` : ` (${sample})`) : "";
+      lines.push(`- **/${cat}** ${label}: ${shown.length}${isEn ? " items" : "개"}${sampleText}`);
+      lines.push(isEn ? `  → Drill down: \`mo gate ${cat}\`` : `  → 상세 목록: \`mo gate ${cat}\``);
+    }
+    lines.push("");
+
+    const alwaysOnTotal = components.filter(
+      (c) => (c.source === "custom" || (c.source ?? DEFAULT_SOURCE) === source) && !RegistryManager.isGated(c)
+    ).length;
+    lines.push(
+      isEn
+        ? `## 2. Always-on Components (${alwaysOnTotal} items)`
+        : `## 2. 상시 활성 구성요소 (${alwaysOnTotal}개)`
+    );
+    lines.push(
+      isEn
+        ? "Agents, hook-dependent plugins, and unparked raw skills loaded by the harness."
+        : "에이전트, 훅 의존 플러그인, 미파킹 낱개 스킬 등 하네스가 상시 로드하는 구성요소."
+    );
+    lines.push("");
+
+    lines.push(...this.renderTokenSavingsLines(tokenSavings, isEn));
+
+    lines.push(
+      isEn
+        ? "*Tip: Use `mo gate <domain>` to view skills for a specific gate, or `mo full --raw` for the complete uncompressed list.*"
+        : "*안내: 특정 게이트의 전수 목록은 `mo gate <domain>`, 원문 전체 출력은 `mo full --raw`를 사용하세요.*"
+    );
+    lines.push("");
+
+    return normalizeNFC(lines.join("\n"));
+  }
+
   private renderBriefReport(
     catMap: Record<string, RegistryComponent[]>,
     savings: { before: number; after: number; saved: number; pct: number },

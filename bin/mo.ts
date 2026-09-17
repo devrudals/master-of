@@ -96,8 +96,14 @@ switch (command) {
   }
 
   case "full": {
-    const { fullReport } = reporter.renderAll();
-    console.log(fullReport);
+    const isRaw = cleanArgs.includes("--raw") || cleanArgs.includes("--all") || args.includes("--raw");
+    if (isRaw) {
+      const { fullReport } = reporter.renderAll();
+      console.log(fullReport);
+    } else {
+      const isEn = config.ensureConfigFile().report_language === "en";
+      console.log(reporter.renderCompactInventory(isEn));
+    }
     break;
   }
 
@@ -483,7 +489,7 @@ Usage:
 
 Commands:
   status, check     Show brief gate status, broken dependencies & token savings
-  full              Show complete skill inventory
+  full [--raw]      Show skill inventory (safe compact summary by default; --raw for full text)
   gate <domain>     Print pre-rendered gate index (e.g. mo gate design --source gemini)
   search <query>    Search across all indexed skills
   doctor            Run diagnostic health checks
