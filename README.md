@@ -44,29 +44,40 @@ $ /master-of:check-skills
 
 ## Install
 
+### Step 1 — add the plugin
+
 ```
 /plugin marketplace add devrudals/master-of
 /plugin install master-of@master-of
 ```
 
-Needs `bun` or Node 22.6+ on your PATH (the scripts are TypeScript run
-directly). If neither is found, the first session tells you so instead of
-silently doing nothing.
+Restart the session. The first `SessionStart` hook will tell you the mo CLI
+needs setup.
 
-Restart the session. The first `SessionStart` hook run bootstraps an empty
-registry (the six domain gates, no skills classified yet) and starts scanning
-your installed skills for classification.
+### Step 2 — connect the v2 CLI (one time)
 
-> If you're developing this plugin locally from a cloned copy of
-> `~/.claude/skills/master-of` (or another skills-dir checkout) *and* also
-> install the marketplace version, both register as a plugin named
-> `master-of` and the marketplace one wins — the local dev copy won't load
-> until you rename one of them. Not an issue for a normal install.
+Clone this repo and run `claude-setup`:
+
+```bash
+git clone https://github.com/devrudals/master-of.git ~/master-of
+bun run ~/master-of/bin/mo.ts claude-setup
+```
+
+This writes `~/.master-of/mo` (the permanent wrapper), generates the gate
+index files Claude reads, and rewrites the hook inside
+`~/.claude/skills/master-of/` to use it. Needs `bun` (≥ 1.1) on your PATH.
+
+**Restart the session again.** From now on every session start rescans
+automatically — zero setup from here on.
+
+> **If you move or re-clone the repo**, re-run `claude-setup` from the new
+> path to update the wrapper. The plugin itself does not need to be
+> reinstalled.
 
 ## How it works, in four steps
 
 1. **Session starts** → the hook (a few milliseconds) diffs your skills
-   against `~/.claude/masterof/registry.json`. Silent if nothing changed.
+   against `~/.master-of/registry.json`. Silent if nothing changed.
 2. **You ask for work in a domain** → the model opens that one gate, reading
    only its pre-rendered index (a few hundred to a couple thousand tokens,
    not the whole registry), and activates just what the task needs.
@@ -105,7 +116,7 @@ changes, and the fixes the health check points at.
   your own skills into these gates, or ask `check-skills` to create a new
   gate, freely.
 - Reports render in English or Korean. The first session picks from your
-  system locale (`LANG`) and records it in `~/.claude/masterof/config.json`;
+  system locale (`LANG`) and records it in `~/.master-of/config.json`;
   `check-skills` switches it if your actual session language differs. Other
   languages need a string table added to the two renderer scripts — PRs
   welcome.
@@ -149,7 +160,7 @@ bun run bin/mo.ts classify <name> <gate> [--cluster x] [--domain gate]
 bun run bin/mo.ts gate design [--source gemini]
 bun run bin/mo.ts doctor               # dead MCP binaries, disabled plugins, missing files
 bun run bin/mo.ts mcp-snippet          # paste into Cursor / Windsurf / Claude Desktop config
-bun test                               # 87 tests; bun run typecheck for tsc
+bun test                               # 99 tests; bun run typecheck for tsc
 ```
 
 Gate files are rendered per source so each harness only sees skills it can run;
