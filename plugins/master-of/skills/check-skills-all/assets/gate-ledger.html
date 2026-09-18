@@ -1,0 +1,196 @@
+<title>Gate Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<style>
+  :root{
+    --bg:#f4f6f5; --card:#ffffff; --ink:#1b2225; --muted:#5b6670; --border:#d9e1e0;
+    --accent:#0f766e; --accent-soft:#e4f3f0; --warn:#b45309; --warn-soft:#fdf1e2;
+    --mono-bg:#eef2f1; --link:#0f766e; --shadow:0 1px 2px rgba(20,30,28,.06), 0 8px 24px -12px rgba(20,30,28,.12);
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#12171a; --card:#182022; --ink:#e7edec; --muted:#93a1ab; --border:#2a3538;
+      --accent:#2dd4bf; --accent-soft:#152b28; --warn:#f5a524; --warn-soft:#2b2114;
+      --mono-bg:#0f1517; --link:#5eead4; --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#12171a; --card:#182022; --ink:#e7edec; --muted:#93a1ab; --border:#2a3538;
+    --accent:#2dd4bf; --accent-soft:#152b28; --warn:#f5a524; --warn-soft:#2b2114;
+    --mono-bg:#0f1517; --link:#5eead4; --shadow:0 1px 2px rgba(0,0,0,.4), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  *{box-sizing:border-box;}
+  body{background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans",system-ui,sans-serif; padding:20px 16px 64px; font-size:15px; line-height:1.55;}
+  .wrap{max-width:920px; margin:0 auto;}
+
+  header{display:flex; flex-wrap:wrap; align-items:baseline; justify-content:space-between; gap:8px 20px; padding-bottom:18px; border-bottom:1px solid var(--border); margin-bottom:22px;}
+  h1{font-family:"Fraunces",serif; font-weight:600; font-size:clamp(28px,5vw,38px); margin:0; letter-spacing:-0.01em; text-wrap:balance;}
+  .subtitle{color:var(--muted); font-size:13.5px; margin-top:4px;}
+  .stamp{font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--muted); white-space:nowrap;}
+
+  #status{display:flex; align-items:center; gap:8px; font-size:13px; color:var(--muted); margin-bottom:18px;}
+  .dot{width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none;}
+  .dot.ok{background:var(--accent);}
+
+  .toc{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:26px;}
+  .toc a{font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--ink); background:var(--card); border:1px solid var(--border); border-radius:999px; padding:5px 12px; text-decoration:none; box-shadow:var(--shadow);}
+  .toc a:hover{border-color:var(--accent); color:var(--accent);}
+
+  #content{background:var(--card); border:1px solid var(--border); border-radius:14px; padding:8px clamp(16px,4vw,40px) 36px; box-shadow:var(--shadow);}
+
+  #content h2{font-family:"Fraunces",serif; font-weight:600; font-size:22px; margin:34px 0 4px; padding-top:14px; border-top:1px solid var(--border); scroll-margin-top:16px;}
+  #content h2:first-child{border-top:none; margin-top:18px;}
+  #content h3{font-family:"IBM Plex Sans",sans-serif; font-weight:600; font-size:15.5px; color:var(--accent); margin:22px 0 10px; scroll-margin-top:16px;}
+  #content p{color:var(--ink); margin:8px 0;}
+  #content > p:first-of-type{color:var(--muted); font-size:13.5px;}
+  #content ul{margin:6px 0 14px; padding-left:0; list-style:none;}
+  #content li{font-family:"IBM Plex Mono",monospace; font-size:13px; line-height:1.7; padding:6px 10px; border-radius:6px; display:flex; gap:8px;}
+  #content li:hover{background:var(--mono-bg);}
+  #content li strong{font-family:"IBM Plex Sans",sans-serif; font-weight:600; color:var(--ink); font-size:13.5px;}
+  #content li::before{content:"›"; color:var(--accent); flex:none; font-family:"IBM Plex Sans",sans-serif;}
+
+  #content li.row{display:grid; grid-template-columns:200px 1fr; gap:2px 18px; align-items:start; padding:9px 10px;}
+  #content li.row::before{content:none;}
+  #content li.row .name-col{font-family:"IBM Plex Sans",sans-serif; font-weight:600; font-size:13.5px; color:var(--ink); display:flex; flex-wrap:wrap; align-items:center; gap:6px; word-break:break-word;}
+  #content li.row .name-col strong{font-size:13.5px;}
+  #content li.row .desc-col{font-family:"IBM Plex Sans",sans-serif; font-size:13px; color:var(--muted); line-height:1.55;}
+  #content li.row .badge, #content li.row .tag{font-family:"IBM Plex Mono",monospace; font-size:10px; padding:1px 6px; border-radius:4px; white-space:nowrap;}
+  #content li.row .badge{color:var(--accent); background:var(--accent-soft);}
+  #content li.row .tag{color:var(--warn); background:var(--warn-soft);}
+  @media (max-width:640px){
+    #content li.row{grid-template-columns:1fr; gap:4px;}
+  }
+  #content code{font-family:"IBM Plex Mono",monospace; background:var(--mono-bg); padding:1px 5px; border-radius:4px; font-size:12.5px;}
+  #content pre{background:var(--mono-bg); border:1px solid var(--border); border-radius:10px; padding:14px 16px; overflow-x:auto; font-family:"IBM Plex Mono",monospace; font-size:13px; font-variant-numeric:tabular-nums;}
+  #content pre code{background:none; padding:0;}
+  #content a{color:var(--link);}
+  #content strong{font-weight:600;}
+  #content hr{border:none; border-top:1px solid var(--border); margin:20px 0;}
+
+  .warn-line{background:var(--warn-soft); color:var(--warn); border-radius:8px; padding:8px 12px; font-family:"IBM Plex Mono",monospace; font-size:13px; margin:10px 0;}
+
+  footer{text-align:center; color:var(--muted); font-size:12px; margin-top:30px; font-family:"IBM Plex Mono",monospace;}
+
+  @media (max-width:520px){
+    #content{padding-left:14px; padding-right:14px;}
+    .toc{gap:6px;}
+  }
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Gate Ledger</h1>
+      <div class="subtitle">master-of skill-gate inventory — full component list by domain</div>
+    </div>
+    <div class="stamp" id="stamp">loading…</div>
+  </header>
+
+  <div id="status"><span class="dot" id="statusDot"></span><span id="statusText">report.md 불러오는 중…</span></div>
+
+  <nav class="toc" id="toc"></nav>
+
+  <div id="content">불러오는 중…</div>
+
+  <footer>generated by <code>mo report</code> · rendered client-side from report.md</footer>
+</div>
+
+<script>
+(function(){
+  fetch('report.md').then(function(r){
+    if(!r.ok) throw new Error('report.md fetch failed: ' + r.status);
+    return r.text();
+  }).then(function(md){
+    var html = marked.parse(md, { mangle:false, headerIds:false });
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+
+    // Slug + id every h2/h3 so the TOC and anchors work, then wrap the "before/after" fenced
+    // token block so it reads like a receipt instead of a plain code block.
+    var used = {};
+    var toc = document.getElementById('toc');
+    tmp.querySelectorAll('h2, h3').forEach(function(h){
+      var slug = h.textContent.toLowerCase().replace(/[^a-z0-9가-힣]+/g,'-').replace(/^-+|-+$/g,'') || 'section';
+      var id = slug; var n = 1;
+      while(used[id]){ id = slug + '-' + (++n); }
+      used[id] = true;
+      h.id = id;
+      if(h.tagName === 'H2'){
+        var a = document.createElement('a');
+        a.href = '#' + id;
+        a.textContent = h.textContent.replace(/^#+\s*/,'');
+        toc.appendChild(a);
+      }
+    });
+
+    tmp.querySelectorAll('pre').forEach(function(pre){
+      if(/tok/.test(pre.textContent)) pre.classList.add('warn-line');
+    });
+
+    // Split each "- **name**[ (tag)]: description" list item into a
+    // name column and a description column instead of one long line.
+    tmp.querySelectorAll('ul > li').forEach(function(li){
+      var strong = li.querySelector(':scope > strong, :scope > em > strong');
+      if(!strong) return;
+
+      var prefixParts = [];
+      var node = li.firstChild;
+      while(node && node !== strong){
+        prefixParts.push(node.nodeType === 3 ? node.textContent : node.outerHTML);
+        node = node.nextSibling;
+      }
+      var prefix = prefixParts.join('').trim();
+
+      var name = strong.textContent;
+
+      var rest = document.createElement('span');
+      node = strong.nextSibling;
+      while(node){
+        var next = node.nextSibling;
+        rest.appendChild(node);
+        node = next;
+      }
+      var restHtml = rest.innerHTML;
+
+      var tag = '';
+      var tagMatch = restHtml.match(/^\s*\(([^)]+)\)\s*:\s*/);
+      if(tagMatch){
+        tag = tagMatch[1];
+        restHtml = restHtml.slice(tagMatch[0].length);
+      } else {
+        restHtml = restHtml.replace(/^\s*:\s*/, '');
+      }
+
+      var nameCol = document.createElement('div');
+      nameCol.className = 'name-col';
+      if(prefix) nameCol.innerHTML += '<span class="badge">' + prefix + '</span>';
+      var strongEl = document.createElement('strong');
+      strongEl.textContent = name;
+      nameCol.appendChild(strongEl);
+      if(tag) nameCol.innerHTML += '<span class="tag">' + tag + '</span>';
+
+      var descCol = document.createElement('div');
+      descCol.className = 'desc-col';
+      descCol.innerHTML = restHtml;
+
+      li.innerHTML = '';
+      li.classList.add('row');
+      li.appendChild(nameCol);
+      li.appendChild(descCol);
+    });
+
+    document.getElementById('content').innerHTML = tmp.innerHTML;
+    document.getElementById('statusDot').classList.add('ok');
+    document.getElementById('statusText').textContent = '로드 완료 — ' + md.split('\n').length + ' 줄';
+
+    var m = md.match(/Generated:\s*([^\)*]+)/);
+    document.getElementById('stamp').textContent = m ? m[1].trim() : '';
+  }).catch(function(err){
+    document.getElementById('content').textContent = '리포트를 불러오지 못했습니다: ' + err.message;
+    document.getElementById('statusText').textContent = '로드 실패';
+  });
+})();
+</script>
