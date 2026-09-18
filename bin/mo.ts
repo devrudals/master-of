@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { homedir } from "os";
+import { spawnSync } from "child_process";
 import { readFileSync, existsSync, readdirSync, chmodSync } from "fs";
 import { resolve, join } from "path";
 import { ConfigManager } from "../src/core/config.ts";
@@ -11,7 +12,7 @@ import { AgyGateGenerator } from "../src/adapters/agy/generator.ts";
 import { ClaudeBridge } from "../src/adapters/claude/bridge.ts";
 import { ClaudePluginIndex } from "../src/adapters/claude/plugins.ts";
 import { ClaudePluginInstaller, defaultClaudePluginDir } from "../src/adapters/claude/setup.ts";
-import { ClaudeSkillParker } from "../src/adapters/claude/parking.ts";
+import { ClaudeSkillParker, SyncedPacker } from "../src/adapters/claude/parking.ts";
 import { readJsonSafe, writeAtomicSync } from "../src/core/fs-atomic.ts";
 import { RuleGenerator } from "../src/adapters/rules/generator.ts";
 import { UniversalMcpServer } from "../src/adapters/mcp/server.ts";
@@ -489,6 +490,75 @@ switch (command) {
     break;
   }
 
+  case "cowork": {
+    // Account-synced Cowork packs (plugins/synced/*, skills/synced/*) have no
+    // marketplace entry, but `claude plugin` still recognizes them under a
+    // "<domain>@synced" id and can enable/disable them like any other plugin.
+    // That toggle lives in settings.json and survives the harness re-syncing
+    // the underlying files back onto disk — unlike moving the files ourselves,
+    // which loses that race (confirmed: the harness re-created a parked
+    // folder within the same session). So this drives the real switch instead
+    // of hiding files.
+    const sub = cleanArgs[1];
+    const syncedPacker = new SyncedPacker(config);
+    const domains = [...new Set(syncedPacker.list().map((e) => e.domain))].sort();
+
+    if (sub === "list" || !sub) {
+      if (domains.length === 0) {
+        console.log("No account-synced Cowork packs currently present.");
+      } else {
+        console.log(`${domains.length} synced pack(s): ${domains.join(", ")}`);
+        console.log("Usage: mo cowork on|off [domain]  (omit domain for all)");
+      }
+      break;
+    }
+
+    if (sub !== "on" && sub !== "off") {
+      console.error("Usage: mo cowork [list | on [domain] | off [domain]]");
+      process.exit(1);
+    }
+
+    const target = cleanArgs[2];
+    const targets = target ? [target] : domains;
+    if (target && !domains.includes(target)) {
+      console.error(`'${target}' is not a currently-present synced pack. Known: ${domains.join(", ") || "(none)"}`);
+      process.exit(1);
+    }
+
+    const action = sub === "on" ? "enable" : "disable";
+    for (const d of targets) {
+      const result = spawnSync("claude", ["plugin", action, `${d}@synced`], { encoding: "utf-8" });
+      const line = (result.stdout || result.stderr || "").trim().split("\n")[0];
+      console.log(line || `${d}@synced: ${action} (no output)`);
+    }
+
+    // Re-sync so registry/gates reflect the new enabled/disabled state. The
+    // top-level `pluginIndex` was built from settings.json at process start,
+    // before the `claude plugin` calls above just rewrote it — read it fresh
+    // or the rescan below re-applies the stale enabled/disabled state.
+    const freshPluginIndex = new ClaudePluginIndex(config.getPaths().claudeDir);
+    const scanner = new SkillScanner();
+    const paths = config.getPaths();
+    const fullPathOf = (c: RegistryComponent) => registryManager.resolveFullPath(c);
+    const { unique: scanned } = dedupeByName(
+      [
+        ...(existsSync(paths.claudeDir) ? scanner.scanDirectory(paths.claudeDir, "claude") : [])
+          .filter((c) => !freshPluginIndex.isStaleCachePath(fullPathOf(c)))
+          .map((c) => ({ ...c, always_on: !freshPluginIndex.isDormant(c) })),
+        ...(existsSync(paths.geminiDir) ? scanner.scanDirectory(paths.geminiDir, "gemini") : []),
+      ],
+      fullPathOf
+    );
+    registryManager.upsertScanned(scanned);
+    registryManager.pruneMissing(["claude", "gemini"]);
+    if (existsSync(paths.claudeDir)) {
+      new ClaudeBridge(config, registryManager, reporter).syncToClaude();
+    }
+    const { tokenSavings } = reporter.renderAll();
+    console.log(`✓ Gates refreshed. Token reduction: ${tokenSavings.pct}% saved (${tokenSavings.before - tokenSavings.after} tok saved).`);
+    break;
+  }
+
   case "init-agents": {
     const ruleGen = new RuleGenerator(config, registryManager);
     const agentsMd = ruleGen.generateAgentsMd();
@@ -537,6 +607,7 @@ Commands:
   unparked          List raw skills currently always-on in ~/.claude/skills
   park <name> [cat] Park a raw skill into skills-library (or mo park --all)
   unpark <name>     Move a parked skill back to ~/.claude/skills
+  cowork [list|on|off] [domain]  Toggle account-synced Cowork packs (figma, design, …) via claude plugin enable/disable
   init-agents       Output AGENTS.md / Cursor rules template
   mcp-snippet       Output JSON config for Cursor, Windsurf, Claude Desktop
   mcp               Start Model Context Protocol (MCP) Stdio server

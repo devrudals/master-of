@@ -5,6 +5,13 @@ import type { RegistryComponent, PluginStateProvider } from "../../core/types.ts
 /** plugins/cache/<marketplace>/<plugin>/<version>/... → "<plugin>@<marketplace>" */
 const CACHE_PATH = /^plugins[\\/]cache[\\/]([^\\/]+)[\\/]([^\\/]+)[\\/]([^\\/]+)[\\/]/;
 
+/** (plugins|skills)/synced/<uuid>/<domain>[~gN]/... → "<domain>@synced" — the
+ *  account-synced Cowork packs. Claude Code toggles these with the same
+ *  `claude plugin disable <domain>@synced` as a marketplace plugin, but the
+ *  cache path shape differs (no version segment, and repeat syncs pile up
+ *  "~g2", "~g3" … generation suffixes on the domain folder itself). */
+const SYNCED_PATH = /^(?:plugins|skills)[\\/]synced[\\/][^\\/]+[\\/]([^\\/~]+)(?:~g\d+)?[\\/]/;
+
 export interface PluginState {
   installed: boolean;
   enabled: boolean;
@@ -38,8 +45,10 @@ export class ClaudePluginIndex implements PluginStateProvider {
   /** Plugin id owning a claude-anchored component, or null if it is not under plugins/cache. */
   static pluginIdOf(component: RegistryComponent): string | null {
     if (component.path_anchor !== "claude") return null;
-    const m = component.rel_path.match(CACHE_PATH);
-    return m ? `${m[2]}@${m[1]}` : null;
+    const cache = component.rel_path.match(CACHE_PATH);
+    if (cache) return `${cache[2]}@${cache[1]}`;
+    const synced = component.rel_path.match(SYNCED_PATH);
+    return synced ? `${synced[1]}@synced` : null;
   }
 
   pluginIdOf(component: RegistryComponent): string | null {

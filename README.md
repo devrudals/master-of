@@ -160,6 +160,7 @@ bun run bin/mo.ts classify <name> <gate> [--cluster x] [--domain gate]
 bun run bin/mo.ts gate design [--source gemini]
 bun run bin/mo.ts doctor               # dead MCP binaries, disabled plugins, missing files
 bun run bin/mo.ts mcp-snippet          # paste into Cursor / Windsurf / Claude Desktop config
+bun run bin/mo.ts cowork [list|on|off] [domain]  # toggle account-synced Cowork packs (figma, design, …)
 bun test                               # 99 tests; bun run typecheck for tsc
 ```
 
@@ -167,6 +168,18 @@ Gate files are rendered per source so each harness only sees skills it can run;
 the same skill installed in both harnesses is listed in both (`animate` and
 `animate@gemini` in the registry). A rescan refreshes descriptions and paths
 but never overwrites a category you confirmed with `classify`.
+
+Claude Code accounts with the Cowork feature get a set of account-synced
+skill packs (`figma`, `design`, `data`, `marketing`, `engineering`,
+`product-management`, `productivity`, `pdf-viewer`, `cowork-plugin-management`,
+plus a few individual document skills) mirrored onto disk under
+`plugins/synced/` and `skills/synced/`. These have no marketplace entry, so
+`claude plugin list` doesn't show them by default and moving or deleting the
+files doesn't help — the account sync re-creates them within the same
+session. They do, however, respond to `claude plugin enable/disable
+<domain>@synced`, which is the switch `mo cowork` drives: it hides them from
+every session's system prompt without touching the account-level sync, so
+Cowork itself and its collaboration features keep working normally.
 
 ## License
 

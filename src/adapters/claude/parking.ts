@@ -11,6 +11,15 @@ export interface ParkResult {
   to: string;
 }
 
+/** One account-synced Cowork skill pack found under plugins/synced/<uuid>/<domain>
+ *  or skills/synced/<uuid>/<domain>. `root` is which of the two trees it lives in. */
+export interface SyncedPackEntry {
+  domain: string;
+  root: "plugins" | "skills";
+  uuidDir: string;
+  paths: string[]; // every file/dir belonging to this domain (the folder itself, ~gN variants, .meta.json siblings)
+}
+
 export class ClaudeSkillParker {
   constructor(
     private config: ConfigManager,
@@ -132,5 +141,63 @@ export class ClaudeSkillParker {
       results.push(this.parkSkill(item.name, item.category));
     }
     return results;
+  }
+}
+
+/**
+ * Discovers account-synced Cowork skill packs (plugins/synced/<uuid>/<domain>,
+ * skills/synced/<uuid>/<domain>). These have no marketplace entry, but Claude
+ * Code still recognizes each domain as a "<domain>@synced" plugin id that
+ * `claude plugin enable|disable` can toggle — that toggle is what actually
+ * hides them (see the `cowork` CLI command), because moving the files
+ * themselves loses the race: the harness re-syncs a parked folder back onto
+ * disk within the same session, before the plugin-id toggle takes effect on
+ * whether Claude Code loads it at all.
+ */
+export class SyncedPacker {
+  constructor(private config: ConfigManager) {}
+
+  private roots(): Array<{ root: "plugins" | "skills"; dir: string }> {
+    const claudeDir = this.config.getPaths().claudeDir;
+    return [
+      { root: "plugins", dir: join(claudeDir, "plugins", "synced") },
+      { root: "skills", dir: join(claudeDir, "skills", "synced") },
+    ];
+  }
+
+  /** Every domain pack currently present under plugins/synced/* or skills/synced/*. */
+  list(): SyncedPackEntry[] {
+    const entries: SyncedPackEntry[] = [];
+
+    for (const { root, dir } of this.roots()) {
+      if (!existsSync(dir)) continue;
+      for (const uuidEntry of readdirSync(dir)) {
+        if (uuidEntry.startsWith(".")) continue;
+        const uuidDir = join(dir, uuidEntry);
+        if (!statSync(uuidDir).isDirectory()) continue;
+
+        const domains = new Set<string>();
+        for (const child of readdirSync(uuidDir)) {
+          if (child.startsWith(".") || child === "manifest.json" || child === ".staging") continue;
+          // Strip a trailing "<domain>.meta.json" or a "<domain>~gN" version suffix
+          // down to the bare domain name so variants group under one entry.
+          const base = child.replace(/\.meta\.json$/, "").replace(/~g\d+$/, "");
+          domains.add(base);
+        }
+
+        for (const domain of domains) {
+          const paths = readdirSync(uuidDir)
+            .filter((child) => {
+              if (child.startsWith(".") || child === "manifest.json") return false;
+              const base = child.replace(/\.meta\.json$/, "").replace(/~g\d+$/, "");
+              return base === domain;
+            })
+            .map((child) => join(uuidDir, child));
+          if (paths.length > 0) entries.push({ domain, root, uuidDir, paths });
+        }
+      }
+    }
+
+    return entries;
   }
 }
