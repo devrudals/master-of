@@ -430,8 +430,17 @@ switch (command) {
     if (target === "--all") {
       const results = parker.parkAll();
       console.log(`✓ Parked ${results.length} skills into skills-library.`);
-    } else {
+    } else if (existsSync(join(config.getPaths().claudeDir, "skills", target))) {
       const res = parker.parkSkill(target, targetCat);
+      console.log(`✓ Parked '${res.name}' into skills-library/${res.category}/${res.name}`);
+    } else if (existsSync(join(config.getPaths().claudeDir, "agents", `${target}.md`))) {
+      const res = parker.parkComponentFile(target, "agents", targetCat);
+      console.log(`✓ Parked agent '${res.name}' into skills-library/${res.category}/agents/${res.name}.md`);
+    } else if (existsSync(join(config.getPaths().claudeDir, "commands", `${target}.md`))) {
+      const res = parker.parkComponentFile(target, "commands", targetCat);
+      console.log(`✓ Parked command '${res.name}' into skills-library/${res.category}/commands/${res.name}.md`);
+    } else {
+      const res = parker.parkSkill(target, targetCat); // let this throw its own "not found" error
       console.log(`✓ Parked '${res.name}' into skills-library/${res.category}/${res.name}`);
     }
     // Re-sync after parking so registry and gates reflect the new dormant state
@@ -465,8 +474,20 @@ switch (command) {
     }
     assertOwnsClaudeDir();
     const parker = new ClaudeSkillParker(config, registryManager);
-    const res = parker.unparkSkill(target);
-    console.log(`✓ Unparked '${res.name}' back to ~/.claude/skills/${res.name}`);
+    let unparkMsg: string;
+    try {
+      const res = parker.unparkSkill(target);
+      unparkMsg = `✓ Unparked '${res.name}' back to ~/.claude/skills/${res.name}`;
+    } catch {
+      try {
+        const res = parker.unparkComponentFile(target, "agents");
+        unparkMsg = `✓ Unparked agent '${res.name}' back to ~/.claude/agents/${res.name}.md`;
+      } catch {
+        const res = parker.unparkComponentFile(target, "commands");
+        unparkMsg = `✓ Unparked command '${res.name}' back to ~/.claude/commands/${res.name}.md`;
+      }
+    }
+    console.log(unparkMsg);
     // Re-sync
     const scanner = new SkillScanner();
     const paths = config.getPaths();

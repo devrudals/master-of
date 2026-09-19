@@ -142,6 +142,76 @@ export class ClaudeSkillParker {
     }
     return results;
   }
+
+  /**
+   * Moves a single-file agent or command definition — e.g.
+   * ~/.claude/agents/<name>.md — to
+   * ~/.claude/skills-library/<category>/agents/<name>.md.
+   * Mirrors parkSkill for the one-file components scanner.ts treats as
+   * "agent"/"command" types (COMPONENT_DIRS), which parkSkill's
+   * directory-with-SKILL.md logic can't move. skills-library's own
+   * "agents"/"commands" subfolder is not itself a skill dir, so the scanner
+   * still discovers these files (and isDormant() still parks them) exactly
+   * like any other skills-library-rooted component.
+   */
+  parkComponentFile(name: string, kind: "agents" | "commands", targetCategory?: string): ParkResult {
+    const claudeDir = this.config.getPaths().claudeDir;
+    const sourceFile = join(claudeDir, kind, `${name}.md`);
+
+    if (!existsSync(sourceFile)) {
+      throw new Error(`${kind === "agents" ? "Agent" : "Command"} '${name}' not found in ${join(claudeDir, kind)}`);
+    }
+
+    const category = targetCategory || this.registryManager.getComponent(name)?.category || "dev";
+    const libraryDir = join(claudeDir, "skills-library", category, kind);
+    mkdirSync(libraryDir, { recursive: true });
+
+    const destFile = join(libraryDir, `${name}.md`);
+    if (existsSync(destFile)) {
+      throw new Error(`Target file already exists: ${destFile}`);
+    }
+
+    renameSync(sourceFile, destFile);
+
+    return { name, category, from: sourceFile, to: destFile };
+  }
+
+  /**
+   * Moves a parked single-file agent/command back from
+   * ~/.claude/skills-library/<cat>/<kind>/<name>.md to ~/.claude/<kind>/<name>.md.
+   */
+  unparkComponentFile(name: string, kind: "agents" | "commands"): { name: string; from: string; to: string } {
+    const claudeDir = this.config.getPaths().claudeDir;
+    const libraryBase = join(claudeDir, "skills-library");
+
+    if (!existsSync(libraryBase)) {
+      throw new Error(`skills-library does not exist: ${libraryBase}`);
+    }
+
+    let sourceFile: string | null = null;
+    for (const cat of readdirSync(libraryBase)) {
+      const candidate = join(libraryBase, cat, kind, `${name}.md`);
+      if (existsSync(candidate)) {
+        sourceFile = candidate;
+        break;
+      }
+    }
+
+    if (!sourceFile) {
+      throw new Error(`Parked ${kind === "agents" ? "agent" : "command"} '${name}' not found in ${libraryBase}`);
+    }
+
+    const destDir = join(claudeDir, kind);
+    const destFile = join(destDir, `${name}.md`);
+    if (existsSync(destFile)) {
+      throw new Error(`Target file already exists: ${destFile}`);
+    }
+
+    mkdirSync(destDir, { recursive: true });
+    renameSync(sourceFile, destFile);
+
+    return { name, from: sourceFile, to: destFile };
+  }
 }
 
 /**

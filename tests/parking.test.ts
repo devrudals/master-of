@@ -66,3 +66,67 @@ describe("ClaudeSkillParker", () => {
     expect(() => parker.parkSkill("master-of")).toThrow("Cannot park master-of");
   });
 });
+
+describe("ClaudeSkillParker — single-file agents/commands", () => {
+  const sandbox = join(PROJECT_ROOT, "sandbox");
+  const testClaudeDir = join(sandbox, "test-parking-agents-claude");
+
+  beforeEach(() => {
+    if (existsSync(testClaudeDir)) rmSync(testClaudeDir, { recursive: true, force: true });
+    mkdirSync(join(testClaudeDir, "agents"), { recursive: true });
+    writeFileSync(
+      join(testClaudeDir, "agents", "test-agent.md"),
+      "---\nname: test-agent\ndescription: A test agent for parking\n---\n# test-agent\n"
+    );
+    mkdirSync(join(testClaudeDir, "commands"), { recursive: true });
+    writeFileSync(
+      join(testClaudeDir, "commands", "test-command.md"),
+      "---\nname: test-command\ndescription: A test command for parking\n---\n# test-command\n"
+    );
+  });
+
+  it("parks a single-file agent into skills-library/<cat>/agents/", () => {
+    const config = new ConfigManager({ sandboxRoot: sandbox, claudeDir: testClaudeDir });
+    const regManager = new RegistryManager(config);
+    const parker = new ClaudeSkillParker(config, regManager);
+
+    const res = parker.parkComponentFile("test-agent", "agents", "planning");
+    expect(res.name).toBe("test-agent");
+    expect(res.category).toBe("planning");
+
+    expect(existsSync(join(testClaudeDir, "agents", "test-agent.md"))).toBe(false);
+    expect(existsSync(join(testClaudeDir, "skills-library", "planning", "agents", "test-agent.md"))).toBe(true);
+  });
+
+  it("unparks a single-file agent back to ~/.claude/agents/", () => {
+    const config = new ConfigManager({ sandboxRoot: sandbox, claudeDir: testClaudeDir });
+    const regManager = new RegistryManager(config);
+    const parker = new ClaudeSkillParker(config, regManager);
+
+    parker.parkComponentFile("test-agent", "agents", "planning");
+    const res = parker.unparkComponentFile("test-agent", "agents");
+    expect(res.name).toBe("test-agent");
+
+    expect(existsSync(join(testClaudeDir, "agents", "test-agent.md"))).toBe(true);
+    expect(existsSync(join(testClaudeDir, "skills-library", "planning", "agents", "test-agent.md"))).toBe(false);
+  });
+
+  it("parks a single-file command into skills-library/<cat>/commands/", () => {
+    const config = new ConfigManager({ sandboxRoot: sandbox, claudeDir: testClaudeDir });
+    const regManager = new RegistryManager(config);
+    const parker = new ClaudeSkillParker(config, regManager);
+
+    const res = parker.parkComponentFile("test-command", "commands", "dev");
+    expect(existsSync(join(testClaudeDir, "commands", "test-command.md"))).toBe(false);
+    expect(existsSync(join(testClaudeDir, "skills-library", "dev", "commands", "test-command.md"))).toBe(true);
+    expect(res.category).toBe("dev");
+  });
+
+  it("throws a clear error when the agent file doesn't exist", () => {
+    const config = new ConfigManager({ sandboxRoot: sandbox, claudeDir: testClaudeDir });
+    const regManager = new RegistryManager(config);
+    const parker = new ClaudeSkillParker(config, regManager);
+
+    expect(() => parker.parkComponentFile("does-not-exist", "agents")).toThrow("not found");
+  });
+});
