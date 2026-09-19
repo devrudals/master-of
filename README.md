@@ -1,6 +1,10 @@
-# master-of
+# master-of (Master of Tokens)
 
-A skill-gate system for [Claude Code](https://claude.com/claude-code). Every
+<p align="center">
+  <img src="./assets/banner_v2.jpg" alt="master-of: Master of Tokens" width="100%">
+</p>
+
+A skill-gate system for [Claude Code](https://claude.com/claude-code), [Google Antigravity](https://github.com/devrudals/master-of), and AI Agents. Every
 installed skill's description normally sits in the system prompt of *every*
 session, whether that session ever needs it or not — a large personal skill
 library can cost thousands of tokens per session before a single message is
