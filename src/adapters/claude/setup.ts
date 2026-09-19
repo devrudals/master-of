@@ -57,7 +57,7 @@ export class ClaudePluginInstaller {
         {
           $schema: "https://anthropic.com/claude-code/plugin.schema.json",
           name: "master-of",
-          version: "2.0.0",
+          version: "2.1.0",
           description:
             "Skill-gate system (v2 universal core): keeps rarely-used skills dormant behind domain gates and activates only what a task needs. check-skills = status + classify; the scan engine is the mo CLI.",
           skills: [

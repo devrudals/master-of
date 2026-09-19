@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "bun:test";
+import { describe, it, expect, beforeEach, afterAll } from "bun:test";
 import { join } from "path";
 import { existsSync, mkdirSync, writeFileSync, rmSync } from "fs";
 import { ConfigManager } from "../src/core/config.ts";
@@ -17,6 +17,10 @@ describe("ClaudeSkillParker", () => {
       join(testClaudeDir, "skills", "test-skill", "SKILL.md"),
       "---\nname: test-skill\ndescription: A test skill for parking\n---\n# test-skill\n"
     );
+  });
+
+  afterAll(() => {
+    if (existsSync(testClaudeDir)) rmSync(testClaudeDir, { recursive: true, force: true });
   });
 
   it("lists unparked raw skills", () => {
@@ -83,6 +87,10 @@ describe("ClaudeSkillParker — single-file agents/commands", () => {
       join(testClaudeDir, "commands", "test-command.md"),
       "---\nname: test-command\ndescription: A test command for parking\n---\n# test-command\n"
     );
+  });
+
+  afterAll(() => {
+    if (existsSync(testClaudeDir)) rmSync(testClaudeDir, { recursive: true, force: true });
   });
 
   it("parks a single-file agent into skills-library/<cat>/agents/", () => {

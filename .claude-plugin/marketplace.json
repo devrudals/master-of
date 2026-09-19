@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "Marketplace for the master-of Claude Code skill-gate plugin.",
-    "version": "1.0.0"
+    "version": "2.1.0"
   },
   "plugins": [
     {
       "name": "master-of",
       "source": "./plugins/master-of",
       "description": "Keeps rarely-used skills dormant behind domain gates and activates only what a task needs, instead of loading every installed skill into every session. Self-scans at session start, auto-classifies new skills, and reports what's broken (dead MCP servers, gated skills whose plugin is off).",
-      "version": "0.1.0",
+      "version": "2.1.0",
       "author": {
         "name": "devrudals"
       },

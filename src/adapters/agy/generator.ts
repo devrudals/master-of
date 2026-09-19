@@ -142,7 +142,7 @@ master-of 전체 스킬 인벤토리 현황을 확인합니다.
     // 1. Manifest
     const manifest = {
       name: "master-of",
-      version: "2.0.0",
+      version: "2.1.0",
       description: "Universal AI Skill & Context Gateway - 토큰 최적화 및 도메인 게이트웨이",
     };
     writeAtomicSync(join(pluginDir, "plugin.json"), JSON.stringify(manifest, null, 2) + "\n");

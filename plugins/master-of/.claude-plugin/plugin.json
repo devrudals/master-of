@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/plugin.schema.json",
   "name": "master-of",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Skill-gate system for Claude Code: keeps rarely-used skills dormant behind six domain gates (design, dev, pipelines, planning, research, stock — extensible) and activates only the 1-4 skills a task actually needs, instead of loading every installed skill into every session. The scan/classify engine is the `mo` CLI (~/.master-of/mo), which tracks gate membership, always-on/dormant status, and broken dependencies in a local registry. check-skills gives a compact status report (per-gate counts, health check for dead MCP servers or disabled plugins, token-savings estimate) and files newly discovered skills into the right gate. check-skills-all regenerates the full uncompressed per-skill inventory and publishes it as a two-column (name/description) HTML artifact — the gate-ledger — so the raw list never has to be pasted into chat; the chat reply reports only the link plus the before/after/saved token-savings figures from the report's footer. master-of is the cross-domain entry point when a request spans several gates at once; each domain gate (design/dev/pipelines/planning/research/stock) can also be opened directly for a task that clearly sits in one domain.",
   "author": {
     "name": "devrudals"

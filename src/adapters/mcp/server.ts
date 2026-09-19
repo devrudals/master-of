@@ -52,7 +52,7 @@ export class UniversalMcpServer {
         this.respond(id, {
           protocolVersion: "2024-11-05",
           capabilities: { tools: {} },
-          serverInfo: { name: "master-of", version: "2.0.0" },
+          serverInfo: { name: "master-of", version: "2.1.0" },
         });
         return;
       }

@@ -377,6 +377,19 @@ export class RegistryManager {
     return !c.always_on && c.classification !== "ignored";
   }
 
+  /** Confirms all auto-guessed classifications in bulk. */
+  confirmAllGuesses(): number {
+    const list = this.unclassified();
+    for (const comp of list) {
+      comp.classification = "confirmed";
+    }
+    if (list.length > 0) {
+      this.registry.updated_at = new Date().toISOString();
+      this.save();
+    }
+    return list.length;
+  }
+
   /** Only gated components: an always-on one is never listed by category, so
    * its guess changes nothing until it becomes dormant. */
   unclassified(): RegistryComponent[] {

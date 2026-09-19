@@ -184,6 +184,21 @@ describe("Sync semantics", () => {
     expect(registry.getComponent("dup@gemini")!.category).toBe("stock");
   });
 
+  it("confirmAllGuesses confirms all auto-guessed components into confirmed", () => {
+    const registry = new RegistryManager(new ConfigManager({ dataDir, sandboxRoot: SANDBOX, claudeDir }));
+    registry.addComponents([
+      comp("auto-1", { classification: "auto" }),
+      comp("auto-2", { classification: "auto" }),
+      comp("already-confirmed", { classification: "confirmed" }),
+    ]);
+    expect(registry.unclassified().length).toBe(2);
+    const confirmedCount = registry.confirmAllGuesses();
+    expect(confirmedCount).toBe(2);
+    expect(registry.unclassified().length).toBe(0);
+    expect(registry.getComponent("auto-1")!.classification).toBe("confirmed");
+    expect(registry.getComponent("auto-2")!.classification).toBe("confirmed");
+  });
+
   it("pruneMissing drops only components under the given anchors whose file is gone", () => {
     mkdirSync(join(claudeDir, "skills", "present"), { recursive: true });
     writeFileSync(join(claudeDir, "skills", "present", "SKILL.md"), "# present");

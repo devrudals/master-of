@@ -3,6 +3,7 @@
 
 // bin/mo.ts
 import { homedir as homedir2 } from "os";
+import { spawnSync } from "child_process";
 import { readFileSync as readFileSync7, existsSync as existsSync13, readdirSync as readdirSync3, chmodSync as chmodSync2 } from "fs";
 import { resolve as resolve9, join as join14 } from "path";
 
@@ -523,6 +524,17 @@ class RegistryManager {
   }
   static isGated(c) {
     return !c.always_on && c.classification !== "ignored";
+  }
+  confirmAllGuesses() {
+    const list = this.unclassified();
+    for (const comp of list) {
+      comp.classification = "confirmed";
+    }
+    if (list.length > 0) {
+      this.registry.updated_at = new Date().toISOString();
+      this.save();
+    }
+    return list.length;
   }
   unclassified() {
     return Object.values(this.registry.components).filter((c) => c.classification === "auto" && RegistryManager.isGated(c));
@@ -1129,6 +1141,17 @@ class RegistryManager2 {
   }
   static isGated(c) {
     return !c.always_on && c.classification !== "ignored";
+  }
+  confirmAllGuesses() {
+    const list = this.unclassified();
+    for (const comp of list) {
+      comp.classification = "confirmed";
+    }
+    if (list.length > 0) {
+      this.registry.updated_at = new Date().toISOString();
+      this.save();
+    }
+    return list.length;
   }
   unclassified() {
     return Object.values(this.registry.components).filter((c) => c.classification === "auto" && RegistryManager2.isGated(c));
@@ -1740,7 +1763,7 @@ master-of 전체 스킬 인벤토리 현황을 확인합니다.
     mkdirSync3(join8(pluginDir, "rules"), { recursive: true });
     const manifest = {
       name: "master-of",
-      version: "2.0.0",
+      version: "2.1.0",
       description: "Universal AI Skill & Context Gateway - 토큰 최적화 및 도메인 게이트웨이"
     };
     writeAtomicSync(join8(pluginDir, "plugin.json"), JSON.stringify(manifest, null, 2) + `
@@ -1812,6 +1835,7 @@ class ClaudeBridge {
 // src/adapters/claude/plugins.ts
 import { join as join10, resolve as resolve7, sep as sep4 } from "path";
 var CACHE_PATH = /^plugins[\\/]cache[\\/]([^\\/]+)[\\/]([^\\/]+)[\\/]([^\\/]+)[\\/]/;
+var SYNCED_PATH = /^(?:plugins|skills)[\\/]synced[\\/][^\\/]+[\\/]([^\\/~]+)(?:~g\d+)?[\\/]/;
 
 class ClaudePluginIndex {
   states = new Map;
@@ -1834,8 +1858,11 @@ class ClaudePluginIndex {
   static pluginIdOf(component) {
     if (component.path_anchor !== "claude")
       return null;
-    const m = component.rel_path.match(CACHE_PATH);
-    return m ? `${m[2]}@${m[1]}` : null;
+    const cache = component.rel_path.match(CACHE_PATH);
+    if (cache)
+      return `${cache[2]}@${cache[1]}`;
+    const synced = component.rel_path.match(SYNCED_PATH);
+    return synced ? `${synced[1]}@synced` : null;
   }
   pluginIdOf(component) {
     return ClaudePluginIndex.pluginIdOf(component);
@@ -1910,7 +1937,7 @@ class ClaudePluginInstaller {
     write(".claude-plugin/plugin.json", JSON.stringify({
       $schema: "https://anthropic.com/claude-code/plugin.schema.json",
       name: "master-of",
-      version: "2.0.0",
+      version: "2.1.0",
       description: "Skill-gate system (v2 universal core): keeps rarely-used skills dormant behind domain gates and activates only what a task needs. check-skills = status + classify; the scan engine is the mo CLI.",
       skills: [
         "./skills/check-skills",
@@ -2135,6 +2162,94 @@ class ClaudeSkillParker {
     }
     return results;
   }
+  parkComponentFile(name, kind, targetCategory) {
+    const claudeDir = this.config.getPaths().claudeDir;
+    const sourceFile = join12(claudeDir, kind, `${name}.md`);
+    if (!existsSync10(sourceFile)) {
+      throw new Error(`${kind === "agents" ? "Agent" : "Command"} '${name}' not found in ${join12(claudeDir, kind)}`);
+    }
+    const category = targetCategory || this.registryManager.getComponent(name)?.category || "dev";
+    const libraryDir = join12(claudeDir, "skills-library", category, kind);
+    mkdirSync6(libraryDir, { recursive: true });
+    const destFile = join12(libraryDir, `${name}.md`);
+    if (existsSync10(destFile)) {
+      throw new Error(`Target file already exists: ${destFile}`);
+    }
+    renameSync4(sourceFile, destFile);
+    return { name, category, from: sourceFile, to: destFile };
+  }
+  unparkComponentFile(name, kind) {
+    const claudeDir = this.config.getPaths().claudeDir;
+    const libraryBase = join12(claudeDir, "skills-library");
+    if (!existsSync10(libraryBase)) {
+      throw new Error(`skills-library does not exist: ${libraryBase}`);
+    }
+    let sourceFile = null;
+    for (const cat of readdirSync2(libraryBase)) {
+      const candidate = join12(libraryBase, cat, kind, `${name}.md`);
+      if (existsSync10(candidate)) {
+        sourceFile = candidate;
+        break;
+      }
+    }
+    if (!sourceFile) {
+      throw new Error(`Parked ${kind === "agents" ? "agent" : "command"} '${name}' not found in ${libraryBase}`);
+    }
+    const destDir = join12(claudeDir, kind);
+    const destFile = join12(destDir, `${name}.md`);
+    if (existsSync10(destFile)) {
+      throw new Error(`Target file already exists: ${destFile}`);
+    }
+    mkdirSync6(destDir, { recursive: true });
+    renameSync4(sourceFile, destFile);
+    return { name, from: sourceFile, to: destFile };
+  }
+}
+
+class SyncedPacker {
+  config;
+  constructor(config) {
+    this.config = config;
+  }
+  roots() {
+    const claudeDir = this.config.getPaths().claudeDir;
+    return [
+      { root: "plugins", dir: join12(claudeDir, "plugins", "synced") },
+      { root: "skills", dir: join12(claudeDir, "skills", "synced") }
+    ];
+  }
+  list() {
+    const entries = [];
+    for (const { root, dir } of this.roots()) {
+      if (!existsSync10(dir))
+        continue;
+      for (const uuidEntry of readdirSync2(dir)) {
+        if (uuidEntry.startsWith("."))
+          continue;
+        const uuidDir = join12(dir, uuidEntry);
+        if (!statSync4(uuidDir).isDirectory())
+          continue;
+        const domains = new Set;
+        for (const child of readdirSync2(uuidDir)) {
+          if (child.startsWith(".") || child === "manifest.json" || child === ".staging")
+            continue;
+          const base = child.replace(/\.meta\.json$/, "").replace(/~g\d+$/, "");
+          domains.add(base);
+        }
+        for (const domain of domains) {
+          const paths = readdirSync2(uuidDir).filter((child) => {
+            if (child.startsWith(".") || child === "manifest.json")
+              return false;
+            const base = child.replace(/\.meta\.json$/, "").replace(/~g\d+$/, "");
+            return base === domain;
+          }).map((child) => join12(uuidDir, child));
+          if (paths.length > 0)
+            entries.push({ domain, root, uuidDir, paths });
+        }
+      }
+    }
+    return entries;
+  }
 }
 
 // src/core/fs-atomic.ts
@@ -2279,7 +2394,7 @@ class UniversalMcpServer {
         this.respond(id, {
           protocolVersion: "2024-11-05",
           capabilities: { tools: {} },
-          serverInfo: { name: "master-of", version: "2.0.0" }
+          serverInfo: { name: "master-of", version: "2.1.0" }
         });
         return;
       }
@@ -2654,8 +2769,14 @@ Search results for '${query}': (${matches.length} found)
   }
   case "classify": {
     const [, name, category] = cleanArgs;
+    if (name === "--all" || name === "-a") {
+      const count = registryManager.confirmAllGuesses();
+      reporter.renderAll();
+      console.log(`\u2713 Confirmed ${count} component(s) into their current gate categories.`);
+      break;
+    }
     if (!name || !category) {
-      console.error("Usage: mo classify <component-name> <category> [--cluster <name>] [--domain <gate>]");
+      console.error("Usage: mo classify <component-name> <category> [--cluster <name>] [--domain <gate>]  OR  mo classify --all");
       process.exit(1);
     }
     try {
@@ -2860,6 +2981,15 @@ Run 'mo park --all' to move all to skills-library and save tokens.
     if (target === "--all") {
       const results = parker.parkAll();
       console.log(`\u2713 Parked ${results.length} skills into skills-library.`);
+    } else if (existsSync13(join14(config.getPaths().claudeDir, "skills", target))) {
+      const res = parker.parkSkill(target, targetCat);
+      console.log(`\u2713 Parked '${res.name}' into skills-library/${res.category}/${res.name}`);
+    } else if (existsSync13(join14(config.getPaths().claudeDir, "agents", `${target}.md`))) {
+      const res = parker.parkComponentFile(target, "agents", targetCat);
+      console.log(`\u2713 Parked agent '${res.name}' into skills-library/${res.category}/agents/${res.name}.md`);
+    } else if (existsSync13(join14(config.getPaths().claudeDir, "commands", `${target}.md`))) {
+      const res = parker.parkComponentFile(target, "commands", targetCat);
+      console.log(`\u2713 Parked command '${res.name}' into skills-library/${res.category}/commands/${res.name}.md`);
     } else {
       const res = parker.parkSkill(target, targetCat);
       console.log(`\u2713 Parked '${res.name}' into skills-library/${res.category}/${res.name}`);
@@ -2888,8 +3018,20 @@ Run 'mo park --all' to move all to skills-library and save tokens.
     }
     assertOwnsClaudeDir();
     const parker = new ClaudeSkillParker(config, registryManager);
-    const res = parker.unparkSkill(target);
-    console.log(`\u2713 Unparked '${res.name}' back to ~/.claude/skills/${res.name}`);
+    let unparkMsg;
+    try {
+      const res = parker.unparkSkill(target);
+      unparkMsg = `\u2713 Unparked '${res.name}' back to ~/.claude/skills/${res.name}`;
+    } catch {
+      try {
+        const res = parker.unparkComponentFile(target, "agents");
+        unparkMsg = `\u2713 Unparked agent '${res.name}' back to ~/.claude/agents/${res.name}.md`;
+      } catch {
+        const res = parker.unparkComponentFile(target, "commands");
+        unparkMsg = `\u2713 Unparked command '${res.name}' back to ~/.claude/commands/${res.name}.md`;
+      }
+    }
+    console.log(unparkMsg);
     const scanner = new SkillScanner;
     const paths = config.getPaths();
     const fullPathOf = (c) => registryManager.resolveFullPath(c);
@@ -2904,6 +3046,53 @@ Run 'mo park --all' to move all to skills-library and save tokens.
     }
     const { tokenSavings } = reporter.renderAll();
     console.log(`\u2713 Gates refreshed. Token reduction: ${tokenSavings.pct}% saved.`);
+    break;
+  }
+  case "cowork": {
+    const sub = cleanArgs[1];
+    const syncedPacker = new SyncedPacker(config);
+    const domains = [...new Set(syncedPacker.list().map((e) => e.domain))].sort();
+    if (sub === "list" || !sub) {
+      if (domains.length === 0) {
+        console.log("No account-synced Cowork packs currently present.");
+      } else {
+        console.log(`${domains.length} synced pack(s): ${domains.join(", ")}`);
+        console.log("Usage: mo cowork on|off [domain]  (omit domain for all)");
+      }
+      break;
+    }
+    if (sub !== "on" && sub !== "off") {
+      console.error("Usage: mo cowork [list | on [domain] | off [domain]]");
+      process.exit(1);
+    }
+    const target = cleanArgs[2];
+    const targets = target ? [target] : domains;
+    if (target && !domains.includes(target)) {
+      console.error(`'${target}' is not a currently-present synced pack. Known: ${domains.join(", ") || "(none)"}`);
+      process.exit(1);
+    }
+    const action = sub === "on" ? "enable" : "disable";
+    for (const d of targets) {
+      const result = spawnSync("claude", ["plugin", action, `${d}@synced`], { encoding: "utf-8" });
+      const line = (result.stdout || result.stderr || "").trim().split(`
+`)[0];
+      console.log(line || `${d}@synced: ${action} (no output)`);
+    }
+    const freshPluginIndex = new ClaudePluginIndex(config.getPaths().claudeDir);
+    const scanner = new SkillScanner;
+    const paths = config.getPaths();
+    const fullPathOf = (c) => registryManager.resolveFullPath(c);
+    const { unique: scanned } = dedupeByName([
+      ...(existsSync13(paths.claudeDir) ? scanner.scanDirectory(paths.claudeDir, "claude") : []).filter((c) => !freshPluginIndex.isStaleCachePath(fullPathOf(c))).map((c) => ({ ...c, always_on: !freshPluginIndex.isDormant(c) })),
+      ...existsSync13(paths.geminiDir) ? scanner.scanDirectory(paths.geminiDir, "gemini") : []
+    ], fullPathOf);
+    registryManager.upsertScanned(scanned);
+    registryManager.pruneMissing(["claude", "gemini"]);
+    if (existsSync13(paths.claudeDir)) {
+      new ClaudeBridge(config, registryManager, reporter).syncToClaude();
+    }
+    const { tokenSavings } = reporter.renderAll();
+    console.log(`\u2713 Gates refreshed. Token reduction: ${tokenSavings.pct}% saved (${tokenSavings.before - tokenSavings.after} tok saved).`);
     break;
   }
   case "init-agents": {
@@ -2930,7 +3119,7 @@ Run 'mo park --all' to move all to skills-library and save tokens.
       console.error(`Unknown command: ${command}
 `);
     (isUnknown ? console.error : console.log)(`
-master-of (v2.0.0) \u2014 Universal AI Skill & Context Gateway
+master-of (v2.1.0) \u2014 Universal AI Skill & Context Gateway
 
 Usage:
   mo [command] [options]
@@ -2953,6 +3142,7 @@ Commands:
   unparked          List raw skills currently always-on in ~/.claude/skills
   park <name> [cat] Park a raw skill into skills-library (or mo park --all)
   unpark <name>     Move a parked skill back to ~/.claude/skills
+  cowork [list|on|off] [domain]  Toggle account-synced Cowork packs (figma, design, \u2026) via claude plugin enable/disable
   init-agents       Output AGENTS.md / Cursor rules template
   mcp-snippet       Output JSON config for Cursor, Windsurf, Claude Desktop
   mcp               Start Model Context Protocol (MCP) Stdio server

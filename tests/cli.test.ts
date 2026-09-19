@@ -171,6 +171,20 @@ describe("Classification workflow", () => {
     expect(res.stdout).toContain(", gemini)");
     expect(run("gate", "design", "--source", "../claude").status).toBe(1);
   });
+
+  it("confirms all unclassified components with classify --all", () => {
+    if (existsSync(dataDir)) rmSync(dataDir, { recursive: true, force: true });
+    expect(run("sync").status).toBe(0);
+    const pendingBefore = JSON.parse(run("unclassified", "--json").stdout);
+    expect(pendingBefore.length).toBeGreaterThan(0);
+
+    const res = run("classify", "--all");
+    expect(res.status).toBe(0);
+    expect(res.stdout).toContain("Confirmed");
+
+    const pendingAfter = JSON.parse(run("unclassified", "--json").stdout);
+    expect(pendingAfter.length).toBe(0);
+  });
 });
 
 describe("Claude plugin install and session-start hook", () => {

@@ -204,8 +204,14 @@ switch (command) {
 
   case "classify": {
     const [, name, category] = cleanArgs;
+    if (name === "--all" || name === "-a") {
+      const count = registryManager.confirmAllGuesses();
+      reporter.renderAll();
+      console.log(`✓ Confirmed ${count} component(s) into their current gate categories.`);
+      break;
+    }
     if (!name || !category) {
-      console.error("Usage: mo classify <component-name> <category> [--cluster <name>] [--domain <gate>]");
+      console.error("Usage: mo classify <component-name> <category> [--cluster <name>] [--domain <gate>]  OR  mo classify --all");
       process.exit(1);
     }
     try {
@@ -605,7 +611,7 @@ switch (command) {
     const isUnknown = command !== "help" && command !== "--help";
     if (isUnknown) console.error(`Unknown command: ${command}\n`);
     (isUnknown ? console.error : console.log)(`
-master-of (v2.0.0) — Universal AI Skill & Context Gateway
+master-of (v2.1.0) — Universal AI Skill & Context Gateway
 
 Usage:
   mo [command] [options]

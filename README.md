@@ -153,15 +153,18 @@ Cursor, Windsurf or any MCP-capable agent can read the same registry. It is
 **Bun-only** (`bun >= 1.1`) — the entrypoint is TypeScript run directly, with
 no build step, so `node bin/mo.ts` will not work. Key commands:
 
-```
+```bash
 bun run bin/mo.ts sync                 # scan ~/.claude and ~/.gemini, render gates/<source>/<gate>.txt
+bun run bin/mo.ts park --all           # batch-park raw skills, agents, commands into skills-library (85%+ saving)
+bun run bin/mo.ts classify --all       # confirm all auto-guessed categories into confirmed status
 bun run bin/mo.ts unclassified         # components still carrying the scanner's category guess
 bun run bin/mo.ts classify <name> <gate> [--cluster x] [--domain gate]
 bun run bin/mo.ts gate design [--source gemini]
 bun run bin/mo.ts doctor               # dead MCP binaries, disabled plugins, missing files
+bun run bin/mo.ts agy-setup            # generate Antigravity gate skills & install plugin/rules
 bun run bin/mo.ts mcp-snippet          # paste into Cursor / Windsurf / Claude Desktop config
 bun run bin/mo.ts cowork [list|on|off] [domain]  # toggle account-synced Cowork packs (figma, design, …)
-bun test                               # 99 tests; bun run typecheck for tsc
+bun test                               # 110 tests; bun run typecheck for tsc
 ```
 
 Gate files are rendered per source so each harness only sees skills it can run;
