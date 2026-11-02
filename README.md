@@ -188,6 +188,32 @@ session. They do, however, respond to `claude plugin enable/disable
 every session's system prompt without touching the account-level sync, so
 Cowork itself and its collaboration features keep working normally.
 
+## Pair with HOL Guard: review bulk changes before they run
+
+`master-of` is meant to be driven by an agent, and a few of its commands change a lot at once. The session-start hook even suggests `mo park --all` when raw skills are always-on, so an agent can be one step from running it. [HOL Guard](https://github.com/hashgraph-online/hol-guard), an open-source runtime guard for AI agents, ships a community extension, `command.master-of`, that pauses these commands for your approval before they run:
+
+| Command | What it changes |
+| --- | --- |
+| `mo park --all` | Moves every raw skill, agent and command into `skills-library` (`mo unpark` restores one at a time) |
+| `mo classify --all` | Confirms every pending scanner guess; later rescans never overwrite a confirmed category |
+| `mo agy-setup [dir]` | Rewrites the Antigravity gate skills, plugin files and global rule under `~/.gemini/config` |
+| `mo cowork on/off [domain]` | Enables or disables account-synced Cowork packs; with no domain, every pack |
+
+Single-item commands (`mo park <name>`, `mo classify <name> <gate>`), `mo cowork list` and read-only commands (`doctor`, `status`, `search`) are left alone.
+
+The extension is opt-in. With HOL Guard installed (`pipx install hol-guard && hol-guard init`):
+
+```bash
+hol-guard command extensions command.master-of     # needs a Guard release that ships it
+hol-guard command controls preview command.master-of --state enabled
+hol-guard command controls apply command.master-of --state enabled
+hol-guard command explain 'mo park --all'          # check matching without running anything
+```
+
+Guard matches the `mo` and `master-of` executables, so the review applies when the CLI is called as `mo ...`, not as `bun run bin/mo.ts ...`. Approving a review lets the command run as normal; Guard does not undo it.
+
+Rules and tests: [hashgraph-online/hol-guard#3041](https://github.com/hashgraph-online/hol-guard/pull/3041)
+
 ## License
 
 MIT — see [LICENSE](./LICENSE).
